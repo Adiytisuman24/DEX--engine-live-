@@ -6,6 +6,7 @@ import { OrdersTable } from './components/OrdersTable';
 import type { Order, ExecutionStep } from './types';
 import { useExecutionStore, type ExecutionEvent } from './store/executionStore';
 import { useUIStore } from './store/uiStore';
+import { useModeStore } from './store/modeStore';
 import './App.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -16,11 +17,17 @@ console.log('🔗 API Configuration:', { API_URL, WS_URL });
 function App() {
   const { activeOrders, executions, applyEvent, initializeOrders, addOrder } = useExecutionStore();
   const { selectOrder, activeTimelineOrderId } = useUIStore();
+  const { mode } = useModeStore();
   
   const [loading, setLoading] = useState(false);
   const [backendConnected, setBackendConnected] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const ws = useRef<WebSocket | null>(null);
+
+  // Sync mode to window for global access
+  useEffect(() => {
+    (window as any).executionMode = mode;
+  }, [mode]);
 
   // Convert orders map to array for table
   const ordersList = Object.values(activeOrders).sort((a,b) => (b.timestamp || 0) - (a.timestamp || 0));
@@ -124,14 +131,18 @@ function App() {
   // Handle execution logic
   const handleExecute = async (data: { tokenIn: string; tokenOut: string; amount: number; slippage: number; walletAddress: string }) => {
     setLoading(true);
-    // No manual timeline start. We rely on events.
-    // However, for UX "instant feedback", we might want to add a preliminary 'pending' order/event.
     
     try {
+        // Get current mode
+        const currentMode = (window as any).executionMode || 'mock';
+        
         const res = await fetch(`${API_URL}/api/orders/execute`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
+            body: JSON.stringify({
+                ...data,
+                executionMode: currentMode
+            })
         });
         const result = await res.json();
         
@@ -144,9 +155,6 @@ function App() {
             };
             addOrder(newOrder); // Optimistic add
             selectOrder(result.orderId, false); // Auto-select new order
-            
-            // Note: We don't manually run timeline. 
-            // We wait for WS 'pending', 'routing', etc. events to drive the UI.
         } else {
              alert('Error: ' + JSON.stringify(result));
         }

@@ -48,9 +48,62 @@ const buildApp = () => {
         }));
     });
 
+    // Wallet Verification Endpoint
+    fastify.post('/api/verify-wallet', async (request, reply) => {
+        const { walletAddress, apiKey } = request.body as any;
+
+        if (!walletAddress) {
+            return reply.status(400).send({ error: 'Wallet address is required' });
+        }
+
+        try {
+            // Validate wallet address format (basic check)
+            if (walletAddress.length < 32 || walletAddress.length > 44) {
+                return reply.status(400).send({ error: 'Invalid wallet address format' });
+            }
+
+            // Import Connection and PublicKey for Solana
+            const { Connection, PublicKey } = await import('@solana/web3.js');
+
+            // Determine RPC URL (use API key if provided)
+            let rpcUrl = process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com';
+            if (apiKey) {
+                // For Helius: wss://mainnet.helius-rpc.com/?api-key=YOUR_KEY
+                // For QuickNode: https://YOUR_ENDPOINT.quiknode.pro/YOUR_TOKEN/
+                // We'll assume the apiKey is a full RPC URL
+                if (apiKey.startsWith('http')) {
+                    rpcUrl = apiKey;
+                }
+            }
+
+            const connection = new Connection(rpcUrl, 'confirmed');
+            const publicKey = new PublicKey(walletAddress);
+
+            // Get balance
+            const balance = await connection.getBalance(publicKey);
+            const balanceInSol = balance / 1e9; // Convert lamports to SOL
+
+            console.log(`✅ Wallet verified: ${walletAddress} | Balance: ${balanceInSol} SOL`);
+
+            return {
+                success: true,
+                walletAddress,
+                balance: balanceInSol,
+                network: process.env.SOLANA_CLUSTER || 'devnet'
+            };
+
+        } catch (error: any) {
+            console.error('Wallet verification failed:', error);
+            return reply.status(400).send({
+                error: 'Failed to verify wallet',
+                details: error.message
+            });
+        }
+    });
+
 
     fastify.post('/api/orders/execute', async (request, reply) => {
-        const { tokenIn, tokenOut, amount, slippage, walletAddress } = request.body as any;
+        const { tokenIn, tokenOut, amount, slippage, walletAddress, executionMode } = request.body as any;
         
         // Validation
         if (!tokenIn || !tokenOut || !amount || !slippage || !walletAddress) {
@@ -67,7 +120,7 @@ const buildApp = () => {
         );
 
         // Queue
-        await orderQueue.add('execute-swap', { orderId, tokenIn, tokenOut, amount, slippage, walletAddress }, {
+        await orderQueue.add('execute-swap', { orderId, tokenIn, tokenOut, amount, slippage, walletAddress, executionMode }, {
             attempts: 3,
             backoff: { type: 'exponential', delay: 1000 }
         });

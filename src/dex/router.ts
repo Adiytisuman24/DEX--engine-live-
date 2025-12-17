@@ -19,8 +19,9 @@ export class DexRouter {
   private wallet?: Keypair;
   private isRealMode: boolean;
 
-  constructor() {
-    this.isRealMode = EXECUTION_MODE === 'devnet';
+    constructor(modeOverride?: string) {
+    const rawMode = modeOverride || EXECUTION_MODE;
+    this.isRealMode = rawMode === 'devnet';
     
     if (this.isRealMode) {
       this.connection = new Connection(SOLANA_RPC_URL, 'confirmed');
@@ -38,6 +39,8 @@ export class DexRouter {
       } else {
         console.warn('[ROUTER] No WALLET_PRIVATE_KEY provided, using mock mode');
         this.isRealMode = false;
+        // Even without wallet, we might still want to use real connection for reads?
+        // For now, fall back to mock to be safe as per original logic
       }
     } else {
       console.log('[ROUTER] Running in MOCK mode');

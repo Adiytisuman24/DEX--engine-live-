@@ -6,7 +6,8 @@ import { Order } from '../types';
 import IORedis from 'ioredis';
 
 const connection = new IORedis({ host: 'localhost', port: 6379, maxRetriesPerRequest: null });
-const router = new DexRouter();
+const mockRouter = new DexRouter('mock');
+const devnetRouter = new DexRouter('devnet');
 
 async function updateOrder(id: string, updates: Partial<Order>) {
     // DB Update
@@ -31,8 +32,11 @@ async function updateOrder(id: string, updates: Partial<Order>) {
 export const startWorker = () => {
     console.log('Starting Execution Worker...');
     const worker = new Worker('order-execution', async (job: Job) => {
-        const { orderId, tokenIn, tokenOut, amount } = job.data;
-        console.log(`Processing order ${orderId}`);
+        const { orderId, tokenIn, tokenOut, amount, executionMode } = job.data;
+        console.log(`Processing order ${orderId} in ${executionMode || 'default'} mode`);
+
+        // Select Router
+        const router = (executionMode === 'devnet') ? devnetRouter : mockRouter;
 
         const startTime = Date.now();
         try {

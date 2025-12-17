@@ -2,12 +2,13 @@
   "name": "molecule",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "nodemon src/index.ts",
-    "test": "jest --runInBand"
+    "test": "jest --runInBand",
+    "postinstall": "npm run build"
   },
   "keywords": [],
   "author": "",
