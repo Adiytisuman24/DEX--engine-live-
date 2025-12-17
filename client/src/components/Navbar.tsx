@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useModeStore } from '../store/modeStore';
 import { DevnetModal } from './DevnetModal';
 
 export const Navbar: React.FC = () => {
-    const { mode, devnetConfig, setMode, clearDevnetConfig } = useModeStore();
+    const { mode, devnetConfig, clearDevnetConfig } = useModeStore();
     const [showModal, setShowModal] = useState(false);
 
     const handleModeToggle = () => {
