@@ -12,6 +12,11 @@ import './App.css';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:3000/ws';
 
+if (import.meta.env.PROD && API_URL.includes('localhost')) {
+    console.error('⚠️ CRITICAL: Frontend is running in PRODUCTION but VITE_API_URL is set to localhost.');
+    console.error('⚠️ Please configure VITE_API_URL and VITE_WS_URL in your Vercel Project Settings.');
+}
+
 console.log('🔗 API Configuration:', { API_URL, WS_URL });
 
 function App() {
