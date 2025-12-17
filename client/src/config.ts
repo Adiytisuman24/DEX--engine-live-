@@ -20,7 +20,7 @@ export const API_URL = (() => {
     if (isProd) {
         if (!RENDER_BACKEND_URL) {
             console.error('🚨 PRODUCTION ERROR: RENDER_BACKEND_URL is not set in src/config.ts');
-            return 'https://molecule-backend-MISSING-URL.onrender.com';
+            return 'https://dex-engine-live.onrender.com/';
         }
         const url = RENDER_BACKEND_URL;
         return url.replace(/\/$/, '');
