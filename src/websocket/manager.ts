@@ -1,15 +1,13 @@
 import { FastifyInstance } from 'fastify';
-import IORedis from 'ioredis';
-import { ORDERS_CHANNEL } from '../queue';
+import { ORDERS_CHANNEL, redisSubscriber } from '../queue';
 
 export const setupWebsocket = (fastify: FastifyInstance) => {
-    const redisSubscriber = new IORedis({ host: 'localhost', port: 6379 });
     redisSubscriber.subscribe(ORDERS_CHANNEL);
 
     // Map of websocket connections
     const clients = new Set<any>();
 
-    redisSubscriber.on('message', (channel, message) => {
+    redisSubscriber.on('message', (channel: string, message: string) => {
         if (channel === ORDERS_CHANNEL) {
             for (const client of clients) {
                 if (client.readyState === 1) { // 1 = OPEN

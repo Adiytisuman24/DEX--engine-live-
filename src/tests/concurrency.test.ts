@@ -11,11 +11,11 @@ describe('Concurrency Tests', () => {
         await initDb();
         await pool.query('DELETE FROM orders');
         await orderQueue.drain();
-        worker = startWorker();
+        worker = startWorker() as any;
     });
 
     afterAll(async () => {
-        await worker.close();
+        if (worker) await worker.close();
         await pool.end();
         await closeQueueRedis();
     });

@@ -65,7 +65,7 @@ const buildApp = () => {
     fastify.get('/api/orders', async () => {
         const res = await db_1.pool.query('SELECT * FROM orders ORDER BY created_at DESC LIMIT 50');
         // map db snake_case to camelCase
-        return res.rows.map(row => ({
+        return res.rows.map((row) => ({
             orderId: row.id,
             status: row.status,
             tokenIn: row.token_in,

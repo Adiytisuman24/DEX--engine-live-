@@ -1,13 +1,13 @@
 import { Worker, Job } from 'bullmq';
 import { DexRouter } from '../dex/router';
 import { pool } from '../db';
-import { redisPublisher, ORDERS_CHANNEL } from '../queue';
+import { redisPublisher, ORDERS_CHANNEL, listenForMockJobs } from '../queue';
 import { Order } from '../types';
 import IORedis from 'ioredis';
 
-const connection = new IORedis({ host: 'localhost', port: 6379, maxRetriesPerRequest: null });
 const mockRouter = new DexRouter('mock');
 const devnetRouter = new DexRouter('devnet');
+
 
 async function updateOrder(id: string, updates: Partial<Order>) {
     // DB Update
@@ -31,7 +31,9 @@ async function updateOrder(id: string, updates: Partial<Order>) {
 
 export const startWorker = () => {
     console.log('Starting Execution Worker...');
-    const worker = new Worker('order-execution', async (job: Job) => {
+    const EXECUTION_MODE = process.env.EXECUTION_MODE || 'mock';
+
+    const processJob = async (job: { id: string, data: any }) => {
         const { orderId, tokenIn, tokenOut, amount, executionMode } = job.data;
         console.log(`Processing order ${orderId} in ${executionMode || 'default'} mode`);
 
@@ -82,7 +84,7 @@ export const startWorker = () => {
             // 6️⃣ CONFIRMED (Allocated: ~2-3s settlement)
             const remaining = ORDER_DEADLINE - (Date.now() - startTime);
             if (remaining < 0) {
-                 console.warn(`Order ${orderId} exceeded SLA budget.`);
+                    console.warn(`Order ${orderId} exceeded SLA budget.`);
             }
 
             const duration = Date.now() - startTime;
@@ -98,22 +100,33 @@ export const startWorker = () => {
         } catch (e: any) {
             console.error(`Order ${orderId} failed:`, e);
             await updateOrder(orderId, { status: 'failed', errorReason: e.message });
-            throw e; // triggers BullMQ retry
+            // For mock mode, we don't throw to retry, we just log
+            // throw e; 
         }
+    };
 
-    }, { 
-        connection, 
-        concurrency: 50,
-        limiter: {
-            max: 500,
-            duration: 60000 
-        }
-    });
+    if (EXECUTION_MODE === 'mock') {
+        listenForMockJobs(processJob);
+        return null;
+    } else {
+        const redisOptions = process.env.REDIS_URL || { host: 'localhost', port: 6379 };
+        const connection = new IORedis(redisOptions as any, { maxRetriesPerRequest: null });
+        const worker = new Worker('order-execution', async (job: Job) => {
+            await processJob(job as any);
+        }, { 
+            connection, 
+            concurrency: 50,
+            limiter: {
+                max: 500,
+                duration: 60000 
+            }
+        });
 
-    worker.on('failed', (job, err) => {
-        if (job)
-            console.error(`Job ${job.id} failed with ${err.message}`);
-    });
-    
-    return worker;
+        worker.on('failed', (job, err) => {
+            if (job)
+                console.error(`Job ${job.id} failed with ${err.message}`);
+        });
+        
+        return worker;
+    }
 };

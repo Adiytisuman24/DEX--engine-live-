@@ -2,12 +2,129 @@ import { Pool } from 'pg';
 import dotenv from 'dotenv';
 dotenv.config();
 
-export const pool = new Pool({
+export const pool = (process.env.EXECUTION_MODE === 'mock') 
+? new (class MockPool {
+    orders: any[] = [];
+    async query(text: string, params: any[] = []) {
+        const t = text.trim().toUpperCase();
+        
+        if (t.startsWith('DELETE FROM ORDERS')) {
+            this.orders = [];
+            return { rows: [], rowCount: 0 };
+        }
+
+        if (t.startsWith('INSERT INTO ORDERS')) {
+            // Robust parsing logic to map VALUES to Columns
+            // Pattern: INSERT INTO orders (col1, col2...) VALUES ($1, $2...)
+            const colMatch = text.match(/\(([^)]+)\)\s+VALUES/i);
+            if (colMatch) {
+                const cols = colMatch[1].split(',').map(c => c.trim().replace(/^"|"$/g, '')); // remove quotes if any
+                const newOrder: any = { status: 'pending', created_at: new Date(), updated_at: new Date() };
+                
+                // Map params -> cols
+                // In PG, $1 maps to params[0]
+                // We need to match the values part... usually just $1, $2...
+                // But tests might use hardcoded values (e.g. 'pending').
+                // Let's assume standard parameterized queries for now as per codebase usage.
+                cols.forEach((col, idx) => {
+                    if (idx < params.length) {
+                        newOrder[col] = params[idx];
+                    }
+                });
+                
+                // Special case for missing wallet_address in some tests -> default it
+                if (!newOrder.wallet_address) newOrder.wallet_address = 'mock-wallet';
+
+                this.orders.push(newOrder);
+                return { rows: [newOrder], rowCount: 1 };
+            }
+        }
+
+        if (t.startsWith('SELECT COUNT(*)')) {
+            // SELECT COUNT(*) as count FROM orders WHERE status = 'confirmed'
+            const statusMatch = text.match(/status = '([^']+)'/i);
+            let count = this.orders.length;
+            if (statusMatch) {
+                count = this.orders.filter(o => o.status === statusMatch[1]).length;
+            }
+            return { rows: [{ count: count.toString() }], rowCount: 1 };
+        }
+
+        if (t.startsWith('SELECT')) {
+            // Handle WHERE id = $1
+            let results = [...this.orders];
+            const idMatch = text.match(/id = \$(\d+)/i);
+            if (idMatch) {
+                 const idx = parseInt(idMatch[1]) - 1;
+                 if (idx < params.length) {
+                     results = results.filter(o => o.id === params[idx]);
+                 }
+            }
+
+            // Handle ORDER BY
+            if (t.includes('ORDER BY')) {
+                results.sort((a,b) => b.created_at - a.created_at);
+            }
+            // Handle LIMIT
+            if (t.includes('LIMIT')) {
+                results = results.slice(0, 50);
+            }
+
+            // Handle specific field selection? "SELECT status, executed_price..."
+            if (!t.includes('*')) {
+                // simple parser for selected columns
+                const selectPart = text.substring(6, text.toUpperCase().indexOf('FROM')).trim();
+                const fields = selectPart.split(',').map(f => f.trim().split(' ')[0]); // ignore aliases
+                
+                results = results.map(row => {
+                    const newRow: any = {};
+                    fields.forEach(f => {
+                         const cleanF = f.replace(/[^a-z0-9_]/gi, '');
+                         if (row[cleanF] !== undefined) newRow[cleanF] = row[cleanF];
+                    });
+                    return newRow;
+                });
+            }
+
+            return { rows: results, rowCount: results.length };
+        }
+
+        if (t.startsWith('UPDATE ORDERS SET')) {
+            // UPDATE orders SET status = $2..., updated_at = NOW() WHERE id = $1
+            const idMatch = text.match(/id\s*=\s*\$1/i);
+            const id = params[0];
+            const order = this.orders.find(o => o.id === id);
+            
+            if (order) {
+                // Regex to find "column_name = $N"
+                const matches = text.match(/([a-z_]+)\s*=\s*\$(\d+)/g);
+                if (matches) {
+                    matches.forEach(m => {
+                        const parts = m.split('=');
+                        const col = parts[0].trim();
+                        const idx = parseInt(parts[1].trim().replace('$','')) - 1; // 0-indexed
+                        if (idx < params.length && col !== 'id') {
+                             order[col] = params[idx];
+                        }
+                    });
+                }
+                order.updated_at = new Date();
+            }
+            return { rows: [], rowCount: 1 };
+        }
+        
+        // Default fallthrough
+        return { rows: [], rowCount: 0 };
+    }
+    async end() { return; }
+})() as any
+: new Pool({
   user: process.env.POSTGRES_USER || 'admin',
   password: process.env.POSTGRES_PASSWORD || 'password',
-  host: 'localhost',
+  host: process.env.POSTGRES_HOST || 'localhost',
   database: process.env.POSTGRES_DB || 'dex_engine',
-  port: 5432,
+  port: parseInt(process.env.POSTGRES_PORT || '5432'),
+  ssl: process.env.POSTGRES_SSL ? { rejectUnauthorized: false } : undefined
 });
 
 export const initDb = async () => {

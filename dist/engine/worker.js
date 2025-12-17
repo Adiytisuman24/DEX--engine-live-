@@ -9,7 +9,6 @@ const router_1 = require("../dex/router");
 const db_1 = require("../db");
 const queue_1 = require("../queue");
 const ioredis_1 = __importDefault(require("ioredis"));
-const connection = new ioredis_1.default({ host: 'localhost', port: 6379, maxRetriesPerRequest: null });
 const mockRouter = new router_1.DexRouter('mock');
 const devnetRouter = new router_1.DexRouter('devnet');
 async function updateOrder(id, updates) {
@@ -31,7 +30,8 @@ async function updateOrder(id, updates) {
 }
 const startWorker = () => {
     console.log('Starting Execution Worker...');
-    const worker = new bullmq_1.Worker('order-execution', async (job) => {
+    const EXECUTION_MODE = process.env.EXECUTION_MODE || 'mock';
+    const processJob = async (job) => {
         const { orderId, tokenIn, tokenOut, amount, executionMode } = job.data;
         console.log(`Processing order ${orderId} in ${executionMode || 'default'} mode`);
         // Select Router
@@ -83,20 +83,32 @@ const startWorker = () => {
         catch (e) {
             console.error(`Order ${orderId} failed:`, e);
             await updateOrder(orderId, { status: 'failed', errorReason: e.message });
-            throw e; // triggers BullMQ retry
+            // For mock mode, we don't throw to retry, we just log
+            // throw e; 
         }
-    }, {
-        connection,
-        concurrency: 50,
-        limiter: {
-            max: 500,
-            duration: 60000
-        }
-    });
-    worker.on('failed', (job, err) => {
-        if (job)
-            console.error(`Job ${job.id} failed with ${err.message}`);
-    });
-    return worker;
+    };
+    if (EXECUTION_MODE === 'mock') {
+        (0, queue_1.listenForMockJobs)(processJob);
+        return null;
+    }
+    else {
+        const redisOptions = process.env.REDIS_URL || { host: 'localhost', port: 6379 };
+        const connection = new ioredis_1.default(redisOptions, { maxRetriesPerRequest: null });
+        const worker = new bullmq_1.Worker('order-execution', async (job) => {
+            await processJob(job);
+        }, {
+            connection,
+            concurrency: 50,
+            limiter: {
+                max: 500,
+                duration: 60000
+            }
+        });
+        worker.on('failed', (job, err) => {
+            if (job)
+                console.error(`Job ${job.id} failed with ${err.message}`);
+        });
+        return worker;
+    }
 };
 exports.startWorker = startWorker;

@@ -1,17 +1,12 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.setupWebsocket = void 0;
-const ioredis_1 = __importDefault(require("ioredis"));
 const queue_1 = require("../queue");
 const setupWebsocket = (fastify) => {
-    const redisSubscriber = new ioredis_1.default({ host: 'localhost', port: 6379 });
-    redisSubscriber.subscribe(queue_1.ORDERS_CHANNEL);
+    queue_1.redisSubscriber.subscribe(queue_1.ORDERS_CHANNEL);
     // Map of websocket connections
     const clients = new Set();
-    redisSubscriber.on('message', (channel, message) => {
+    queue_1.redisSubscriber.on('message', (channel, message) => {
         if (channel === queue_1.ORDERS_CHANNEL) {
             for (const client of clients) {
                 if (client.readyState === 1) { // 1 = OPEN
@@ -35,7 +30,7 @@ const setupWebsocket = (fastify) => {
         });
     });
     fastify.addHook('onClose', async () => {
-        await redisSubscriber.quit();
+        await queue_1.redisSubscriber.quit();
     });
 };
 exports.setupWebsocket = setupWebsocket;

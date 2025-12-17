@@ -24,7 +24,8 @@ describe('API Tests', () => {
                 tokenIn: 'SOL',
                 tokenOut: 'USDC',
                 amount: 1.5,
-                slippage: 0.01
+                slippage: 0.01,
+                walletAddress: 'mock-wallet-123'
             }
         });
 
