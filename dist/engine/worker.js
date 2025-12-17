@@ -22,44 +22,60 @@ async function updateOrder(id, updates) {
         await db_1.pool.query(`UPDATE orders SET ${fields.join(', ')}, updated_at = NOW() WHERE id = $1`, [id, ...Object.values(updates)]);
     }
     // Publish event
-    if (updates.status) {
-        queue_1.redisPublisher.publish(queue_1.ORDERS_CHANNEL, JSON.stringify({
-            orderId: id,
-            status: updates.status,
-            metadata: updates
-        }));
-    }
+    queue_1.redisPublisher.publish(queue_1.ORDERS_CHANNEL, JSON.stringify({
+        orderId: id,
+        status: updates.status, // might be undefined, which is fine
+        metadata: updates
+    }));
 }
 const startWorker = () => {
     console.log('Starting Execution Worker...');
     const worker = new bullmq_1.Worker('order-execution', async (job) => {
         const { orderId, tokenIn, tokenOut, amount } = job.data;
         console.log(`Processing order ${orderId}`);
+        const startTime = Date.now();
         try {
-            // 2. Routing
+            // ⏳ GLOBAL DEADLINE GUARD (10s Budget)
+            const ORDER_DEADLINE = 10000;
+            // 1️⃣ PENDING (Already set on enqueue, but re-confirm)
+            // await updateOrder(orderId, { status: 'pending' }); // Optional since API does it
+            // 2️⃣ ROUTING (Allocated: ~1-2s)
             await updateOrder(orderId, { status: 'routing' });
-            const [raydium, meteora] = await Promise.all([
-                router.getQuote('Raydium'),
-                router.getQuote('Meteora')
-            ]);
-            console.log(`[ROUTER] Raydium: ${raydium.effectivePrice.toFixed(2)} | Meteora: ${meteora.effectivePrice.toFixed(2)}`);
-            const bestQuote = raydium.effectivePrice > meteora.effectivePrice ? raydium : meteora;
-            console.log(`Selected: ${bestQuote.dex}`);
-            await updateOrder(orderId, { selectedDex: bestQuote.dex });
-            // 3. Building
+            // Parallel: Route calculation + min delay for visibility
+            const routingTask = router.findBestQuote(tokenIn, tokenOut, amount);
+            const routingDelay = new Promise(r => setTimeout(r, 1000));
+            // Wait for both
+            const [bestQuote] = await Promise.all([routingTask, routingDelay]);
+            console.log(`[ROUTER] Selected Best Quote: ${bestQuote.dex} @ ${bestQuote.effectivePrice.toFixed(6)}`);
+            // 3️⃣ ROUTE SELECTED (Allocated: ~1s)
+            await updateOrder(orderId, {
+                status: 'route_selected',
+                selectedDex: bestQuote.dex,
+                executedPrice: bestQuote.price
+            });
+            await new Promise(r => setTimeout(r, 1000));
+            // 4️⃣ BUILDING (Allocated: ~1s)
             await updateOrder(orderId, { status: 'building' });
-            await new Promise(r => setTimeout(r, 500)); // Mock building time (blockhash etc)
-            // 4. Submitted
+            await new Promise(r => setTimeout(r, 1000));
+            // 5️⃣ SUBMITTED (Allocated: ~1s) 
             await updateOrder(orderId, { status: 'submitted' });
-            await new Promise(r => setTimeout(r, 1000)); // Mock network confirmation
-            // 5. Confirmed
-            const txHash = '0x' + Math.random().toString(36).substring(7);
+            // Execute the swap (real or mock depending on EXECUTION_MODE)
+            const slippage = 0.01; // Default 1% slippage
+            const swapResult = await router.executeSwap(bestQuote, tokenIn, tokenOut, amount, slippage);
+            await new Promise(r => setTimeout(r, 1000));
+            // 6️⃣ CONFIRMED (Allocated: ~2-3s settlement)
+            const remaining = ORDER_DEADLINE - (Date.now() - startTime);
+            if (remaining < 0) {
+                console.warn(`Order ${orderId} exceeded SLA budget.`);
+            }
+            const duration = Date.now() - startTime;
             await updateOrder(orderId, {
                 status: 'confirmed',
-                executedPrice: bestQuote.price,
-                txHash
+                executedPrice: swapResult.executedPrice,
+                txHash: swapResult.txHash,
+                timestamp: duration
             });
-            console.log(`Order ${orderId} CONFIRMED: ${txHash}`);
+            console.log(`Order ${orderId} CONFIRMED: ${swapResult.txHash} in ${duration}ms [${router.getMode()}]`);
         }
         catch (e) {
             console.error(`Order ${orderId} failed:`, e);
@@ -68,9 +84,9 @@ const startWorker = () => {
         }
     }, {
         connection,
-        concurrency: 10,
+        concurrency: 50,
         limiter: {
-            max: 100,
+            max: 500,
             duration: 60000
         }
     });

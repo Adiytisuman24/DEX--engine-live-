@@ -22,10 +22,20 @@ const setupWebsocket = (fastify) => {
     });
     fastify.register(async function (fastify) {
         fastify.get('/ws', { websocket: true }, (connection, req) => {
-            console.log('Client connected to WebSocket');
-            clients.add(connection.socket);
-            connection.socket.on('close', () => clients.delete(connection.socket));
+            const socket = connection.socket || connection;
+            console.log('Client connected to WebSocket. Socket available:', !!socket);
+            if (socket && (socket.on || socket.addEventListener)) {
+                clients.add(socket);
+                socket.on('close', () => clients.delete(socket));
+                // Keep alive / Ping if needed
+            }
+            else {
+                console.error("Invalid websocket connection object", Object.keys(connection || {}));
+            }
         });
+    });
+    fastify.addHook('onClose', async () => {
+        await redisSubscriber.quit();
     });
 };
 exports.setupWebsocket = setupWebsocket;

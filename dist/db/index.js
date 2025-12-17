@@ -24,6 +24,7 @@ const initDb = async () => {
                     id UUID PRIMARY KEY,
                     token_in VARCHAR(10) NOT NULL,
                     token_out VARCHAR(10) NOT NULL,
+                    wallet_address VARCHAR(100),
                     amount DECIMAL NOT NULL,
                     slippage DECIMAL NOT NULL,
                     status VARCHAR(20) NOT NULL,
@@ -34,6 +35,22 @@ const initDb = async () => {
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
+                
+                -- Attempt to add column if it doesn't exist (migration hack for dev)
+                DO $$ 
+                BEGIN 
+                    BEGIN
+                        ALTER TABLE orders ADD COLUMN wallet_address VARCHAR(100);
+                    EXCEPTION
+                        WHEN duplicate_column THEN RAISE NOTICE 'column wallet_address already exists in orders.';
+                    END;
+                    
+                    BEGIN
+                        ALTER TABLE orders ADD COLUMN timestamp BIGINT; -- Stores execution duration in ms
+                    EXCEPTION
+                        WHEN duplicate_column THEN RAISE NOTICE 'column timestamp already exists in orders.';
+                    END;
+                END $$;
             `);
             console.log('DB Initialized');
             break;

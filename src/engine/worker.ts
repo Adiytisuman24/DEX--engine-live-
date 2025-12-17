@@ -64,44 +64,32 @@ export const startWorker = () => {
 
             // 4️⃣ BUILDING (Allocated: ~1s)
             await updateOrder(orderId, { status: 'building' });
-            
-            // Pure computation simulation
-            const txData = `${orderId}-${Date.now()}-${amount}`;
-            let hash = 5381;
-            for (let i = 0; i < txData.length; i++) hash = ((hash << 5) + hash) + txData.charCodeAt(i);
-            const txHash = '0x' + (hash >>> 0).toString(16).padStart(64, '0');
-            
             await new Promise(r => setTimeout(r, 1000));
 
-            // 5️⃣ SUBMITTED (Allocated: ~1s)
-            await updateOrder(orderId, { 
-                status: 'submitted',
-                txHash: txHash
-            });
+            // 5️⃣ SUBMITTED (Allocated: ~1s) 
+            await updateOrder(orderId, { status: 'submitted' });
+            
+            // Execute the swap (real or mock depending on EXECUTION_MODE)
+            const slippage = 0.01; // Default 1% slippage
+            const swapResult = await router.executeSwap(bestQuote, tokenIn, tokenOut, amount, slippage);
+            
             await new Promise(r => setTimeout(r, 1000));
 
             // 6️⃣ CONFIRMED (Allocated: ~2-3s settlement)
-            // Guard: don't confirm if we are already over budget? 
-            // Actually, we should confirm if possible, but let's check remaining time.
             const remaining = ORDER_DEADLINE - (Date.now() - startTime);
             if (remaining < 0) {
-                 // In strict mode, maybe fail? But for UX, better to complete late than fail late.
-                 // We'll log a warning.
                  console.warn(`Order ${orderId} exceeded SLA budget.`);
             }
-
-            // Simulate network settlement (2s)
-            await new Promise(r => setTimeout(r, 2000));
 
             const duration = Date.now() - startTime;
             
             await updateOrder(orderId, { 
                 status: 'confirmed', 
-                executedPrice: bestQuote.price,
-                txHash,
+                executedPrice: swapResult.executedPrice,
+                txHash: swapResult.txHash,
                 timestamp: duration
             });
-            console.log(`Order ${orderId} CONFIRMED: ${txHash} in ${duration}ms`);
+            console.log(`Order ${orderId} CONFIRMED: ${swapResult.txHash} in ${duration}ms [${router.getMode()}]`);
 
         } catch (e: any) {
             console.error(`Order ${orderId} failed:`, e);

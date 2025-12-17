@@ -13,7 +13,7 @@ describe('API Tests', () => {
     afterAll(async () => {
         await server_1.app.close();
         await db_1.pool.end();
-        await queue_1.orderQueue.close();
+        await (0, queue_1.closeQueueRedis)();
     });
     test('POST /api/orders/execute should create order', async () => {
         const response = await server_1.app.inject({

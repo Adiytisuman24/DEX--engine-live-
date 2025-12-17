@@ -14,7 +14,7 @@ describe('Integration Tests', () => {
     afterAll(async () => {
         await worker.close();
         await db_1.pool.end();
-        await queue_1.orderQueue.close();
+        await (0, queue_1.closeQueueRedis)();
     });
     test('Full Order Lifecycle', async () => {
         const orderId = '00000000-0000-0000-0000-000000000001';

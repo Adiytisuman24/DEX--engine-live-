@@ -15,7 +15,7 @@ describe('Concurrency Tests', () => {
     afterAll(async () => {
         await worker.close();
         await db_1.pool.end();
-        await queue_1.orderQueue.close();
+        await (0, queue_1.closeQueueRedis)();
     });
     test('Should process 5 orders concurrently', async () => {
         const orderIds = [];
