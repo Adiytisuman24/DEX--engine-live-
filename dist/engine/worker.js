@@ -10,7 +10,8 @@ const db_1 = require("../db");
 const queue_1 = require("../queue");
 const ioredis_1 = __importDefault(require("ioredis"));
 const connection = new ioredis_1.default({ host: 'localhost', port: 6379, maxRetriesPerRequest: null });
-const router = new router_1.DexRouter();
+const mockRouter = new router_1.DexRouter('mock');
+const devnetRouter = new router_1.DexRouter('devnet');
 async function updateOrder(id, updates) {
     // DB Update
     const fields = Object.keys(updates).map((k, i) => {
@@ -31,8 +32,10 @@ async function updateOrder(id, updates) {
 const startWorker = () => {
     console.log('Starting Execution Worker...');
     const worker = new bullmq_1.Worker('order-execution', async (job) => {
-        const { orderId, tokenIn, tokenOut, amount } = job.data;
-        console.log(`Processing order ${orderId}`);
+        const { orderId, tokenIn, tokenOut, amount, executionMode } = job.data;
+        console.log(`Processing order ${orderId} in ${executionMode || 'default'} mode`);
+        // Select Router
+        const router = (executionMode === 'devnet') ? devnetRouter : mockRouter;
         const startTime = Date.now();
         try {
             // ⏳ GLOBAL DEADLINE GUARD (10s Budget)

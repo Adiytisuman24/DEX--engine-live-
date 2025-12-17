@@ -13,8 +13,9 @@ const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.
 const SIM_LATENCY_MIN = 20;
 const SIM_LATENCY_MAX = 50;
 class DexRouter {
-    constructor() {
-        this.isRealMode = EXECUTION_MODE === 'devnet';
+    constructor(modeOverride) {
+        const rawMode = modeOverride || EXECUTION_MODE;
+        this.isRealMode = rawMode === 'devnet';
         if (this.isRealMode) {
             this.connection = new web3_js_1.Connection(SOLANA_RPC_URL, 'confirmed');
             // Initialize wallet if private key is provided
@@ -32,6 +33,8 @@ class DexRouter {
             else {
                 console.warn('[ROUTER] No WALLET_PRIVATE_KEY provided, using mock mode');
                 this.isRealMode = false;
+                // Even without wallet, we might still want to use real connection for reads?
+                // For now, fall back to mock to be safe as per original logic
             }
         }
         else {
