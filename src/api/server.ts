@@ -18,6 +18,14 @@ const buildApp = () => {
 
     setupWebsocket(fastify);
 
+    const EXECUTION_MODE = process.env.EXECUTION_MODE || 'mock';
+    console.log('');
+    console.log('═══════════════════════════════════════');
+    console.log(`  ⚡ DEX Execution Engine`);
+    console.log(`  Mode: ${EXECUTION_MODE.toUpperCase()}`);
+    console.log('═══════════════════════════════════════');
+    console.log('');
+
     fastify.get('/', async () => {
         return { status: 'ok', message: 'DEX Order Execution Engine is running 🚀' };
     });
