@@ -2,12 +2,12 @@ import type { ExecutionStep } from '../types';
 
 export const TIMELINE = [
   { step: "pending", at: 0 },
-  { step: "queued", at: 10 },
-  { step: "routing", at: 15 },
-  { step: "route_selected", at: 80 },
-  { step: "building", at: 95 },
-  { step: "submitted", at: 120 },
-  { step: "confirmed", at: 3000 } // upper bound enforced by backend
+  { step: "queued", at: 800 },
+  { step: "routing", at: 2000 },
+  { step: "route_selected", at: 3500 },
+  { step: "building", at: 5000 },
+  { step: "submitted", at: 6500 },
+  { step: "confirmed", at: 8500 } 
 ] as const;
 
 type ValidationMap = Record<ExecutionStep, boolean>;

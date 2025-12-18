@@ -10,6 +10,7 @@ import { useModeStore } from './store/modeStore';
 import './App.css';
 
 import { API_URL, WS_URL } from './config';
+import { TIMELINE } from './utils/timelineController';
 
 if (import.meta.env.PROD && API_URL.includes('MISSING-URL')) {
     console.error('⚠️ CRITICAL: You are in PRODUCTION but have not set RENDER_BACKEND_URL in client/src/config.ts');
@@ -23,6 +24,9 @@ function App() {
   const { mode } = useModeStore();
   
   const [loading, setLoading] = useState(false);
+  const [activeSimulationId, setActiveSimulationId] = useState<string | null>(null);
+  const [simulatedStep, setSimulatedStep] = useState<ExecutionStep | null>(null);
+  const simulationTimers = useRef<number[]>([]);
   const [backendConnected, setBackendConnected] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const ws = useRef<WebSocket | null>(null);
@@ -131,6 +135,29 @@ function App() {
     };
   }, [initializeOrders, applyEvent]);
 
+  // Clean up timers on unmount
+  useEffect(() => {
+    return () => {
+      simulationTimers.current.forEach(t => clearTimeout(t));
+    };
+  }, []);
+
+  const startSimulation = (orderId: string) => {
+    // Clear old timers
+    simulationTimers.current.forEach(t => window.clearTimeout(t));
+    simulationTimers.current = [];
+
+    setActiveSimulationId(orderId);
+    setSimulatedStep('pending');
+
+    TIMELINE.forEach((item) => {
+        const timer = window.setTimeout(() => {
+            setSimulatedStep(item.step as ExecutionStep);
+        }, item.at);
+        simulationTimers.current.push(timer);
+    });
+  };
+
   // Handle execution logic
   const handleExecute = async (data: { tokenIn: string; tokenOut: string; amount: number; slippage: number; walletAddress: string }) => {
     setLoading(true);
@@ -158,6 +185,7 @@ function App() {
             };
             addOrder(newOrder); // Optimistic add
             selectOrder(result.orderId, false); // Auto-select new order
+            startSimulation(result.orderId); // Start the visual progress simulation
         } else {
              alert('Error: ' + JSON.stringify(result));
         }
@@ -179,7 +207,18 @@ function App() {
   
   // Deriving props for ExecutionTimeline from event stream
   const latestEvent = currentEvents[currentEvents.length - 1];
-  const derivedCurrentStep = latestEvent ? (latestEvent.status as ExecutionStep) : null;
+  
+  // Advanced Merge: We want the "most advanced" step between simulation and real events
+  // to avoid flickering and ensure the user sees progress even if the network lags.
+  const getStepIndex = (s: string | null) => TIMELINE.findIndex(item => item.step === s);
+  
+  const serverStep = latestEvent?.status as ExecutionStep;
+  const simStep = (activeTimelineOrderId === activeSimulationId) ? simulatedStep : null;
+  
+  const derivedCurrentStep = (getStepIndex(serverStep) >= getStepIndex(simStep)) 
+    ? serverStep 
+    : (simStep as ExecutionStep);
+  
   const derivedValidations = currentEvents.reduce((acc, ev) => {
       acc[ev.status as string] = true;
       return acc;
