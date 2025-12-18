@@ -156,8 +156,9 @@ Connect to: `ws://localhost:3000/ws`
 
 ## 🔗 Links
 
-*   **Deployment**: (https://dex-engine-demo.onrender.com)
+*   **Deployment**: (dex-engine-live.vercel.app)
 *   **Demo Video**: (https://youtube.com/...](https://youtu.be/SgyjJpLL2YA?si=_MnaS7_9gIA3Drp-)
+
 
 
 
