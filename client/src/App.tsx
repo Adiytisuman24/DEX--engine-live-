@@ -24,9 +24,6 @@ function App() {
   const { mode } = useModeStore();
   
   const [loading, setLoading] = useState(false);
-  const [activeSimulationId, setActiveSimulationId] = useState<string | null>(null);
-  const [simulatedStep, setSimulatedStep] = useState<ExecutionStep | null>(null);
-  const simulationTimers = useRef<number[]>([]);
   const [backendConnected, setBackendConnected] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const ws = useRef<WebSocket | null>(null);
@@ -138,27 +135,28 @@ function App() {
   // Clean up timers on unmount
   useEffect(() => {
     return () => {
-      simulationTimers.current.forEach(t => clearTimeout(t));
+      // simulationTimers.current.forEach(t => clearTimeout(t)); // This was removed as simulation is now centralized
     };
   }, []);
 
-  const startSimulation = (orderId: string) => {
-    // Clear old timers
-    simulationTimers.current.forEach(t => window.clearTimeout(t));
-    simulationTimers.current = [];
+  // This was moved to the store
+  // const startSimulation = (orderId: string) => {
+  //   // Clear old timers
+  //   simulationTimers.current.forEach(t => window.clearTimeout(t));
+  //   simulationTimers.current = [];
 
-    setActiveSimulationId(orderId);
-    setSimulatedStep('pending');
+  //   setActiveSimulationId(orderId);
+  //   setSimulatedStep('pending');
 
-    TIMELINE.forEach((item) => {
-        const timer = window.setTimeout(() => {
-            setSimulatedStep(item.step as ExecutionStep);
-        }, item.at);
-        simulationTimers.current.push(timer);
-    });
-  };
+  //   TIMELINE.forEach((item) => {
+  //       const timer = window.setTimeout(() => {
+  //           setSimulatedStep(item.step as ExecutionStep);
+  //       }, item.at);
+  //       simulationTimers.current.push(timer);
+  //   });
+  // };
 
-  // Handle execution logic
+  // handleExecute using store actions
   const handleExecute = async (data: { tokenIn: string; tokenOut: string; amount: number; slippage: number; walletAddress: string }) => {
     setLoading(true);
     
@@ -183,9 +181,10 @@ function App() {
                 ...data,
                 timestamp: Date.now()
             };
-            addOrder(newOrder); // Optimistic add
-            selectOrder(result.orderId, false); // Auto-select new order
-            startSimulation(result.orderId); // Start the visual progress simulation
+            addOrder(newOrder); 
+            selectOrder(result.orderId, false); 
+            // Trigger centralized simulation
+            useExecutionStore.getState().startSimulation(result.orderId, TIMELINE);
         } else {
              alert('Error: ' + JSON.stringify(result));
         }
@@ -206,10 +205,11 @@ function App() {
   // to interpret the event history visual state.
   
   // Deriving props for ExecutionTimeline from event stream
-  const latestEvent = currentEvents[currentEvents.length - 1];
-  
   // MERGE logic: Real backend events are the primary truth.
   // ALLOWANCE: Simulation can "anticipate" all the way to 'submitted' to feel premium.
+  const { activeSimulationId, simulatedStep } = useExecutionStore();
+  const latestEvent = currentEvents[currentEvents.length - 1];
+
   const getStepIndex = (s: string | null) => s ? TIMELINE.findIndex(item => item.step === s) : -1;
   const serverIdx = getStepIndex(latestEvent?.status as string || activeTimelineOrder?.status || null);
   const simIdx = (activeTimelineOrderId === activeSimulationId) ? getStepIndex(simulatedStep) : -1;

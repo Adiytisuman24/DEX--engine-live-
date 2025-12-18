@@ -36,15 +36,21 @@ interface ExecutionStore {
   // Active state snapshot: source of truth for Table/Panels
   activeOrders: Record<string, Order>;
 
+  // Visual simulation state
+  activeSimulationId: string | null;
+  simulatedStep: ExecutionStatus | null;
+
   // Actions
   applyEvent: (event: ExecutionEvent) => void;
   initializeOrders: (orders: Order[]) => void;
   addOrder: (order: Order) => void;
+  startSimulation: (orderId: string, timeline: readonly { step: string, at: number }[]) => void;
+  stopSimulation: () => void;
 }
 
 export const useExecutionStore = create<ExecutionStore>((set) => ({
-  executions: {},
-  activeOrders: {},
+  activeSimulationId: null,
+  simulatedStep: null,
 
   initializeOrders: (orders) => 
     set(() => ({
@@ -60,6 +66,25 @@ export const useExecutionStore = create<ExecutionStore>((set) => ({
         executions: { ...state.executions, [order.orderId]: [] }
     })),
 
+  startSimulation: (orderId, timeline) => {
+    set({ activeSimulationId: orderId, simulatedStep: 'pending' });
+    
+    // Clear old timers if any (though usually managed by stopSimulation)
+    timeline.forEach((item) => {
+        setTimeout(() => {
+            set((state) => {
+                // Only update if we're still simulating this specific order
+                if (state.activeSimulationId === orderId) {
+                    return { simulatedStep: item.step as ExecutionStatus };
+                }
+                return {};
+            });
+        }, item.at);
+    });
+  },
+
+  stopSimulation: () => set({ activeSimulationId: null, simulatedStep: null }),
+
   applyEvent: (event) => 
     set((state) => {
         const previousEvents = state.executions[event.orderId] || [];
@@ -67,34 +92,35 @@ export const useExecutionStore = create<ExecutionStore>((set) => ({
         
         const existingOrder = state.activeOrders[event.orderId];
         
-        // Strict: if order not known, we can't update snapshot.
-        // In real app, might want to fetch or upsert partial.
         if (!existingOrder) {
              return {
                  executions: { ...state.executions, [event.orderId]: newEvents }
              };
         }
 
+        // If this event is 'confirmed' or 'failed', we should stop any simulation for it
+        const isTerminal = ['confirmed', 'failed'].includes(event.status);
+        const simUpdate = (isTerminal && state.activeSimulationId === event.orderId) 
+            ? { activeSimulationId: null, simulatedStep: null } 
+            : {};
+
         const updatedOrder: Order = {
             ...existingOrder,
             status: event.status as any,
-            
-            // Map specific fields
             executedPrice: event.executedPrice ?? existingOrder.executedPrice,
             errorReason: event.error ?? existingOrder.errorReason,
             selectedDex: event.dex ?? existingOrder.selectedDex,
             txHash: event.txHash ?? existingOrder.txHash,
-            
-            // Queue & Retry info
             queuePosition: event.queuePosition ?? existingOrder.queuePosition,
             retryAttempt: event.retryAttempt ?? existingOrder.retryAttempt,
             maxRetries: event.maxRetries ?? existingOrder.maxRetries,
-            completedAt: ['confirmed', 'failed'].includes(event.status) ? Date.now() : existingOrder.completedAt
+            completedAt: isTerminal ? Date.now() : existingOrder.completedAt
         };
 
         return {
             executions: { ...state.executions, [event.orderId]: newEvents },
-            activeOrders: { ...state.activeOrders, [event.orderId]: updatedOrder }
+            activeOrders: { ...state.activeOrders, [event.orderId]: updatedOrder },
+            ...simUpdate
         };
     })
 }));

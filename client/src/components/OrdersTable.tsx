@@ -91,6 +91,12 @@ export const OrdersTable: React.FC<Props> = ({ orders, onSelectOrder, isCompact 
                             const isSelected = selectedOrderIds.includes(order.orderId);
                             const isHovered = hoveredOrderId === order.orderId;
                             
+                            // Use centralized simulation state for visual status
+                            const { activeSimulationId, simulatedStep } = useExecutionStore.getState();
+                            const displayStatus = (order.orderId === activeSimulationId && simulatedStep) 
+                                ? simulatedStep 
+                                : order.status;
+
                             const totalValue = order.executedPrice ? (order.amount * order.executedPrice) : undefined;
 
                             return (
@@ -123,10 +129,8 @@ export const OrdersTable: React.FC<Props> = ({ orders, onSelectOrder, isCompact 
                                     <div style={{fontWeight: 500}}>{order.amount} {order.tokenIn}</div>
                                 </td>
                                 <td style={{ padding: rowPadding }}>
-                                    <span className={`badge badge-${order.status}`} style={{
-                                        // Ensure validated/history colors are kept
-                                    }}>
-                                        {order.status}
+                                    <span className={`badge badge-${displayStatus}`}>
+                                        {displayStatus.charAt(0).toUpperCase() + displayStatus.slice(1).replace("_", " ")}
                                     </span>
                                 </td>
                                 <td style={{ padding: rowPadding }}>
