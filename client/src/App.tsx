@@ -209,18 +209,21 @@ function App() {
   const latestEvent = currentEvents[currentEvents.length - 1];
   
   // MERGE logic: Real backend events are the primary truth.
-  // ALLOWANCE: Simulation can "anticipate" up to 2 steps ahead to feel fluid.
+  // ALLOWANCE: Simulation can "anticipate" all the way to 'submitted' to feel premium.
   const getStepIndex = (s: string | null) => s ? TIMELINE.findIndex(item => item.step === s) : -1;
   const serverIdx = getStepIndex(latestEvent?.status as string || activeTimelineOrder?.status || null);
   const simIdx = (activeTimelineOrderId === activeSimulationId) ? getStepIndex(simulatedStep) : -1;
 
-  // Final visual index: allow simulation to lead by up to 2 steps, but NEVER auto-confirm.
-  const ANTICIPATION_WINDOW = 2;
-  const maxAllowedIdx = Math.min(serverIdx + ANTICIPATION_WINDOW, TIMELINE.length - 2); // Cap at 'submitted'
+  // Visual Window: allow simulation to lead, but strictly WAIT for server for 'confirmed'.
+  const SUBMITTED_IDX = TIMELINE.findIndex(i => i.step === 'submitted');
+  const CONFIRMED_IDX = TIMELINE.findIndex(i => i.step === 'confirmed');
   
+  // Independent Progress: Up to 'Submitted'
   let visualIdx = Math.max(serverIdx, simIdx);
-  if (visualIdx > maxAllowedIdx && serverIdx < TIMELINE.length - 1) {
-      visualIdx = maxAllowedIdx;
+  
+  // If we haven't reached 'confirmed' on the server, don't let simulation show it.
+  if (serverIdx < CONFIRMED_IDX && visualIdx >= CONFIRMED_IDX) {
+      visualIdx = SUBMITTED_IDX;
   }
 
   const derivedCurrentStep = visualIdx >= 0 ? TIMELINE[visualIdx]?.step as ExecutionStep : null;
@@ -230,9 +233,11 @@ function App() {
       return acc;
   }, {} as Record<string, boolean>);
   
-  // Visual validation: turn steps green as the simulation/server reaches them
+  // Visual validation: turn steps green as the simulation/server reaches them.
+  // To ensure the path looks solid, we validate everything up to visualIdx.
   for (let i = 0; i <= visualIdx; i++) {
-      derivedValidations[TIMELINE[i].step] = true;
+    const stepName = TIMELINE[i].step;
+    derivedValidations[stepName] = true;
   }
   
   const showTimeline = !!activeTimelineOrder;

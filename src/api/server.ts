@@ -144,7 +144,8 @@ const buildApp = () => {
         );
 
         // Queue
-        console.log(`[API] 🟦 ADDING JOB TO QUEUE for Order: ${orderId} (PID: ${process.pid})`);
+        console.log(`[API-MOCK] 🟢 ENQUEUING: ${orderId} (PID: ${process.pid}, BusID: ${(global as any).__MOCK_BUS__?.listenerCount('mock-job')})`);
+        
         await orderQueue.add('execute-swap', { orderId, tokenIn, tokenOut, amount, slippage, walletAddress, executionMode }, {
             attempts: 3,
             backoff: { type: 'exponential', delay: 1000 }
