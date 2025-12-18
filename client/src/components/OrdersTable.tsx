@@ -12,8 +12,9 @@ export const OrdersTable: React.FC<Props> = ({ orders, onSelectOrder, isCompact 
     const [tab, setTab] = useState<'active' | 'history'>('active');
     const { selectedOrderIds, hoveredOrderId, setHoveredOrder } = useUIStore();
     
-    // Use an initializer function to avoid calling Date.now() during re-renders, 
-    // and avoid the cascading render lint rule.
+    // Reactive access to simulation state
+    const { activeSimulationId, simulatedStep } = useExecutionStore();
+    
     const [now, setNow] = useState(() => Date.now()); 
     
     useEffect(() => {
@@ -21,10 +22,13 @@ export const OrdersTable: React.FC<Props> = ({ orders, onSelectOrder, isCompact 
         return () => clearInterval(timer);
     }, []);
 
-    const STICKY_DURATION = 2 * 60 * 1000; // 2 minutes in ms
+    // Increased from 10 to 60 minutes for maximum persistence
+    const STICKY_DURATION = 60 * 60 * 1000; 
 
     const isActive = (o: Order) => {
+        // Active if in progress
         if (['pending', 'queued', 'routing', 'route_selected', 'building', 'submitted'].includes(o.status)) return true;
+        // Or if it recently finished
         if (o.completedAt && (now - o.completedAt < STICKY_DURATION)) return true;
         return false;
     };
@@ -49,7 +53,7 @@ export const OrdersTable: React.FC<Props> = ({ orders, onSelectOrder, isCompact 
                         cursor: 'pointer', borderTop: 'none', borderLeft: 'none', borderRight: 'none'
                     }}
                 >
-                    Active Orders ({activeOrders.length})
+                    Recent & Active ({activeOrders.length})
                 </button>
                 <button 
                     onClick={() => setTab('history')}
@@ -60,10 +64,10 @@ export const OrdersTable: React.FC<Props> = ({ orders, onSelectOrder, isCompact 
                         cursor: 'pointer', borderTop: 'none', borderLeft: 'none', borderRight: 'none'
                     }}
                 >
-                    History
+                    Archive
                 </button>
                 {selectedOrderIds.length > 0 && <div style={{marginLeft: 'auto', display: 'flex', alignItems: 'center', paddingRight: '1rem', fontSize: '0.875rem', color: 'var(--text-muted)'}}>
-                    {selectedOrderIds.length} order(s) selected
+                    {selectedOrderIds.length} selected
                 </div>}
             </div>
 
@@ -83,7 +87,7 @@ export const OrdersTable: React.FC<Props> = ({ orders, onSelectOrder, isCompact 
                             <tr>
                                 <td colSpan={5} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
                                     <div style={{opacity: 0.5, marginBottom: '0.5rem'}}>📭</div>
-                                    No orders found in {tab}
+                                    No orders found
                                 </td>
                             </tr>
                         )}
@@ -91,8 +95,7 @@ export const OrdersTable: React.FC<Props> = ({ orders, onSelectOrder, isCompact 
                             const isSelected = selectedOrderIds.includes(order.orderId);
                             const isHovered = hoveredOrderId === order.orderId;
                             
-                            // Use centralized simulation state for visual status
-                            const { activeSimulationId, simulatedStep } = useExecutionStore.getState();
+                            // SYNC Logic: Priority to simulation for the active order
                             const displayStatus = (order.orderId === activeSimulationId && simulatedStep) 
                                 ? simulatedStep 
                                 : order.status;

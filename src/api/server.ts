@@ -68,7 +68,8 @@ const buildApp = () => {
             executedPrice: row.executed_price ? parseFloat(row.executed_price) : undefined,
             txHash: row.tx_hash,
             errorReason: row.error_reason,
-            createdAt: row.created_at
+            createdAt: row.created_at,
+            completedAt: row.updated_at // Use updated_at as fallback for completed_at if status is terminal
         }));
     });
 
