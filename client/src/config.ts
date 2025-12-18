@@ -4,7 +4,7 @@
 // =================================================================================
 
 // 1. PASTE YOUR RENDER BACKEND URL HERE (e.g., 'https://molecule-backend-xyz.onrender.com')
-export const RENDER_BACKEND_URL: string = ''; 
+export const RENDER_BACKEND_URL: string = 'https://dex-engine-live.onrender.com/'; 
 
 // =================================================================================
 
@@ -17,6 +17,11 @@ export const API_URL = (() => {
         return import.meta.env.VITE_API_URL;
     }
     
+    // 2. If RENDER_BACKEND_URL is manually set, use it (even in Dev)
+    if (RENDER_BACKEND_URL) {
+         return RENDER_BACKEND_URL.replace(/\/$/, '');
+    }
+
     if (isProd) {
         if (!RENDER_BACKEND_URL) {
             console.error('🚨 PRODUCTION ERROR: RENDER_BACKEND_URL is not set in src/config.ts');
