@@ -27,6 +27,9 @@ A robust, production-grade Node.js + TypeScript order execution engine for execu
 ## 🚀 Key Features
 
 *   **Market Order Execution**: Simulated execution with smart routing between Raydium and Meteora throughout the lifecycle.
+*   **Devnet Mode**: Intelligent network-aware execution with Helius/Solana Devnet integration.
+*   **Wallet Verification**: Secure wallet audit showing balance and network connectivity status.
+*   **Intelligent Slippage**: Automatically calculates and recommends slippage (0.5% - 2%) based on simulated network congestion.
 *   **Smart Routing**: Selects the best effective price (Price - Fee) with simulated latency and slippage (2-5% variance).
 *   **Queue-Based Processing**: Uses **BullMQ** + **Redis** for reliable, concurrent job processing (Up to 10 concurrent orders).
 *   **Real-Time Updates**: **WebSocket** streams exact status changes (`pending` -> `routing` -> `building` -> `submitted` -> `confirmed`).

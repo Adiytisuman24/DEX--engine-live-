@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { Order } from '../types';
 import { useUIStore } from '../store/uiStore';
+import { useExecutionStore } from '../store/executionStore';
 
 interface Props {
     orders: Order[];

@@ -49,6 +49,8 @@ interface ExecutionStore {
 }
 
 export const useExecutionStore = create<ExecutionStore>((set) => ({
+  executions: {},
+  activeOrders: {},
   activeSimulationId: null,
   simulatedStep: null,
 

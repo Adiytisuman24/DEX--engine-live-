@@ -65,11 +65,11 @@ const buildApp = () => {
             amount: parseFloat(row.amount),
             slippage: parseFloat(row.slippage),
             selectedDex: row.selected_dex,
-            executedPrice: row.executed_price ? parseFloat(row.executed_price) : undefined,
+            executedPrice: row.executed_price != null ? parseFloat(String(row.executed_price)) : undefined,
             txHash: row.tx_hash,
             errorReason: row.error_reason,
             createdAt: row.created_at,
-            completedAt: row.updated_at // Use updated_at as fallback for completed_at if status is terminal
+            completedAt: row.completed_at || row.updated_at
         }));
     });
 
@@ -91,16 +91,8 @@ const buildApp = () => {
             const { Connection, PublicKey } = await import('@solana/web3.js');
 
             // Determine RPC URL (use API key if provided)
-            let rpcUrl = process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com';
-            if (apiKey) {
-                // For Helius: wss://mainnet.helius-rpc.com/?api-key=YOUR_KEY
-                // For QuickNode: https://YOUR_ENDPOINT.quiknode.pro/YOUR_TOKEN/
-                // We'll assume the apiKey is a full RPC URL
-                if (apiKey.startsWith('http')) {
-                    rpcUrl = apiKey;
-                }
-            }
-
+            // Using internal Helius API key as per user request
+            const rpcUrl = `https://devnet.helius-rpc.com/?api-key=a4705aae-14c8-4ac6-b373-2f77d7223aaf`;
             const connection = new Connection(rpcUrl, 'confirmed');
             const publicKey = new PublicKey(walletAddress);
 
@@ -108,12 +100,16 @@ const buildApp = () => {
             const balance = await connection.getBalance(publicKey);
             const balanceInSol = balance / 1e9; // Convert lamports to SOL
 
-            console.log(`✅ Wallet verified: ${walletAddress} | Balance: ${balanceInSol} SOL`);
+            // Mock network congestion analysis for slippage recommendation
+            const recommendedSlippage = balanceInSol > 10 ? 0.005 : 0.015; // 0.5% or 1.5% based on wallet "tier" for demo
+
+            console.log(`✅ Wallet verified: ${walletAddress} | Balance: ${balanceInSol} SOL | Recommended Slippage: ${recommendedSlippage * 100}%`);
 
             return {
                 success: true,
                 walletAddress,
                 balance: balanceInSol,
+                recommendedSlippage,
                 network: process.env.SOLANA_CLUSTER || 'devnet'
             };
 

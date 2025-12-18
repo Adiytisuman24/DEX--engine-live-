@@ -25,16 +25,28 @@ class MockRedis extends events_1.EventEmitter {
     }
     quit() { return Promise.resolve(); }
 }
-const globalMockRedis = new events_1.EventEmitter(); // Shared bus for all mock instances
+// Truly global bus for mock singleton
+const getGlobalBus = () => {
+    const g = global;
+    if (!g.__MOCK_BUS__) {
+        g.__MOCK_BUS__ = new events_1.EventEmitter();
+        g.__MOCK_BUS__.setMaxListeners(100);
+    }
+    return g.__MOCK_BUS__;
+};
+const globalMockRedis = getGlobalBus();
 class MockQueue {
     constructor(name) { this.name = name; }
     async add(name, data, opts) {
-        console.log(`[MockQueue] Added job ${name} to ${this.name}`);
-        // Simulate worker processing by emitting an event that the worker can listen to
-        globalMockRedis.emit('mock-job', { name, data, opts });
+        console.log(`[MockQueue] 🟢 EMITTING JOB: ${name} for order ${data.orderId} (PID: ${process.pid})`);
+        // Use a slight delay to ensure listeners are ready
+        setTimeout(() => {
+            globalMockRedis.emit('mock-job', { name, data, opts });
+        }, 100);
         return { id: 'mock-' + Date.now() };
     }
     async close() { }
+    async drain() { }
 }
 // ---------------------------
 const createRedisClient = () => {
@@ -68,7 +80,9 @@ exports.closeQueueRedis = closeQueueRedis;
 // Helper for the worker to listen for mock jobs
 const listenForMockJobs = (handler) => {
     if (EXECUTION_MODE === 'mock') {
+        console.log('[Worker] 👂 Setting up Mock Job Listener...');
         globalMockRedis.on('mock-job', async (payload) => {
+            console.log(`[Worker] 📥 RECEIVED JOB: ${payload.name} for order ${payload.data.orderId} (PID: ${process.pid})`);
             try {
                 // Simulate Job object
                 const job = {
@@ -80,7 +94,7 @@ const listenForMockJobs = (handler) => {
                 await handler(job);
             }
             catch (err) {
-                console.error('Mock job failed', err);
+                console.error('[Worker] ❌ Mock job failed', err);
             }
         });
     }

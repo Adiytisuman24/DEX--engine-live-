@@ -20,6 +20,8 @@ console.log('🔗 API Configuration:', { API_URL, WS_URL });
 
 function App() {
   const { activeOrders, executions, applyEvent, initializeOrders, addOrder } = useExecutionStore();
+  const activeOrdersSafe = activeOrders || {};
+  const executionsSafe = executions || {};
   const { selectOrder, activeTimelineOrderId } = useUIStore();
   const { mode } = useModeStore();
   
@@ -34,7 +36,7 @@ function App() {
   }, [mode]);
 
   // Convert orders map to array for table
-  const ordersList = Object.values(activeOrders).sort((a,b) => (b.timestamp || 0) - (a.timestamp || 0));
+  const ordersList = Object.values(activeOrdersSafe).sort((a,b) => (b.timestamp || 0) - (a.timestamp || 0));
 
   useEffect(() => {
     const connect = () => {
@@ -67,13 +69,13 @@ function App() {
                        timestamp: data.timestamp || Date.now(),
                        
                        // Extended fields
-                       retryAttempt: data.attempt || data.retryAttempt || data.metadata?.retryAttempt,
-                       maxRetries: data.maxAttempts || data.maxRetries || data.metadata?.maxRetries,
-                       dex: data.selectedDex || data.dex || data.metadata?.selectedDex,
-                       executedPrice: data.executedPrice || data.bestPrice || data.metadata?.executedPrice, // Map bestPrice for route_selected
-                       error: data.error || data.metadata?.errorReason,
-                       queuePosition: data.queuePosition || data.metadata?.queuePosition,
-                       txHash: data.txHash || data.metadata?.txHash,
+                       retryAttempt: data.attempt || data.retryAttempt || data.metadata?.retryAttempt || data.metadata?.retry_attempt,
+                       maxRetries: data.maxAttempts || data.maxRetries || data.metadata?.maxRetries || data.metadata?.max_retries,
+                       dex: data.selectedDex || data.dex || data.metadata?.selectedDex || data.metadata?.selected_dex,
+                       executedPrice: data.executedPrice ?? data.metadata?.executedPrice ?? data.metadata?.executed_price ?? data.bestPrice, 
+                       error: data.error || data.metadata?.error || data.metadata?.errorReason || data.metadata?.error_reason,
+                       queuePosition: data.queuePosition || data.metadata?.queuePosition || data.metadata?.queue_position,
+                       txHash: data.txHash || data.metadata?.txHash || data.metadata?.tx_hash,
                        
                        // Keep raw for debug if needed, but try not to rely on it
                        metadata: data
@@ -197,9 +199,9 @@ function App() {
     }
   };
 
-  const activeTimelineOrder = activeTimelineOrderId ? activeOrders[activeTimelineOrderId] : undefined;
+  const activeTimelineOrder = activeTimelineOrderId ? activeOrdersSafe[activeTimelineOrderId] : undefined;
   // Get events for the active timeline order to render the timeline steps
-  const currentEvents = activeTimelineOrderId ? (executions[activeTimelineOrderId] || []) : [];
+  const currentEvents = activeTimelineOrderId ? (executionsSafe[activeTimelineOrderId] || []) : [];
   
   // Need to provide `currentStep` and `validations` derived from events for the ExecutionTimeline component
   // to interpret the event history visual state.

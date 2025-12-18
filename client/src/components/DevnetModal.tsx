@@ -1,11 +1,10 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useModeStore } from '../store/modeStore';
 import { API_URL } from '../config';
 
 export const DevnetModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-    const { setDevnetConfig, setMode } = useModeStore();
+    const { devnetConfig, setDevnetConfig, setMode } = useModeStore();
     const [walletAddress, setWalletAddress] = useState('');
-    const [apiKey, setApiKey] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
@@ -13,8 +12,8 @@ export const DevnetModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         setLoading(true);
         setError('');
 
-        if (!apiKey) {
-            setError('API Key is strictly required for Devnet Mode.');
+        if (!walletAddress) {
+            setError('Wallet address is required for Devnet Mode.');
             setLoading(false);
             return;
         }
@@ -23,21 +22,21 @@ export const DevnetModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             const res = await fetch(`${API_URL}/api/verify-wallet`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ walletAddress, apiKey })
+                body: JSON.stringify({ walletAddress })
             });
-
-            if (!res.ok) {
-                const data = await res.json();
-                throw new Error(data.error || 'Verification failed');
-            }
 
             const data = await res.json();
 
+            if (!res.ok) {
+                throw new Error(data.error || 'Verification failed');
+            }
+
             setDevnetConfig({
                 walletAddress,
-                apiKey,
+                apiKey: 'INTERNAL_MANAGED',
                 balance: data.balance,
-                verified: true
+                verified: true,
+                recommendedSlippage: data.recommendedSlippage || 0.01 // Default to 1%
             });
 
             setMode('devnet');
@@ -94,27 +93,7 @@ export const DevnetModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     />
                 </div>
 
-                <div style={{ marginBottom: '1.5rem' }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, fontSize: '0.875rem' }}>
-                        RPC API Key (Required)
-                    </label>
-                    <input
-                        type="password"
-                        value={apiKey}
-                        onChange={(e) => setApiKey(e.target.value)}
-                        placeholder="e.g. Helius / QuickNode API Key"
-                        style={{
-                            width: '100%',
-                            padding: '0.75rem',
-                            border: '1px solid #d1d5db',
-                            borderRadius: '6px',
-                            fontSize: '0.875rem'
-                        }}
-                    />
-                    <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.75rem', color: '#6b7280' }}>
-                        Please fetch an API Key from your Solana RPC provider (e.g. Helius, Alchemy).
-                    </p>
-                </div>
+                {/* API Key input removed as per user request - handled by backend */}
 
                 {error && (
                     <div style={{
@@ -127,6 +106,22 @@ export const DevnetModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                         marginBottom: '1.5rem'
                     }}>
                         {error}
+                    </div>
+                )}
+
+                {devnetConfig?.verified && !error && (
+                    <div style={{
+                        padding: '0.75rem',
+                        background: '#f0fdf4',
+                        border: '1px solid #bbf7d0',
+                        borderRadius: '6px',
+                        color: '#166534',
+                        fontSize: '0.875rem',
+                        marginBottom: '1.5rem'
+                    }}>
+                        ✅ Wallet Verified! <br/>
+                        Balance: <strong>{devnetConfig.balance.toFixed(2)} SOL</strong> <br/>
+                        Slippage Auto-Applied: <strong>{(devnetConfig.recommendedSlippage * 100).toFixed(1)}%</strong>
                     </div>
                 )}
 
@@ -148,15 +143,15 @@ export const DevnetModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     </button>
                     <button
                         onClick={handleVerify}
-                        disabled={!walletAddress || !apiKey || loading}
+                        disabled={!walletAddress || loading}
                         style={{
                             padding: '0.75rem 1.5rem',
-                            background: (!walletAddress || !apiKey || loading) ? '#9ca3af' : '#3b82f6',
+                            background: (!walletAddress || loading) ? '#9ca3af' : '#3b82f6',
                             color: 'white',
                             border: 'none',
                             borderRadius: '6px',
                             fontWeight: 500,
-                            cursor: (!walletAddress || !apiKey || loading) ? 'not-allowed' : 'pointer'
+                            cursor: (!walletAddress || loading) ? 'not-allowed' : 'pointer'
                         }}
                     >
                         {loading ? 'Verifying...' : 'Verify & Enable'}

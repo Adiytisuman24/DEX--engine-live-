@@ -14,50 +14,84 @@ exports.pool = (process.env.EXECUTION_MODE === 'mock')
         }
         async query(text, params = []) {
             const t = text.trim().toUpperCase();
-            if (t.startsWith('INSERT INTO ORDERS')) {
-                // Very basic parse: assumes params match INSERT standard used in app
-                // INSERT INTO orders (id, token_in...) VALUES ($1, $2...)
-                // We know the index logic from the app usage:
-                // [orderId, tokenIn, tokenOut, amount, slippage, walletAddress]
-                // We need to map params to object.
-                // Since this is a specific mock for this app, we can cheat slightly or be robust.
-                // Let's look at the specific INSERT used in server.ts
-                const order = {
-                    id: params[0],
-                    token_in: params[1],
-                    token_out: params[2],
-                    amount: params[3],
-                    slippage: params[4],
-                    wallet_address: params[5],
-                    status: 'pending',
-                    created_at: new Date(),
-                    updated_at: new Date()
-                };
-                this.orders.push(order);
-                return { rows: [order], rowCount: 1 };
+            if (t.startsWith('DELETE FROM ORDERS')) {
+                this.orders = [];
+                return { rows: [], rowCount: 0 };
             }
-            if (t.startsWith('SELECT * FROM ORDERS')) {
-                // ORDER BY created_at DESC LIMIT 50
-                const sorted = [...this.orders].sort((a, b) => b.created_at - a.created_at).slice(0, 50);
-                return { rows: sorted, rowCount: sorted.length };
+            if (t.startsWith('INSERT INTO ORDERS')) {
+                // Robust parsing logic to map VALUES to Columns
+                // Pattern: INSERT INTO orders (col1, col2...) VALUES ($1, $2...)
+                const colMatch = text.match(/\(([^)]+)\)\s+VALUES/i);
+                if (colMatch) {
+                    const cols = colMatch[1].split(',').map(c => c.trim().replace(/^"|"$/g, '')); // remove quotes if any
+                    const newOrder = { status: 'pending', created_at: new Date(), updated_at: new Date() };
+                    // Map params -> cols
+                    // In PG, $1 maps to params[0]
+                    // We need to match the values part... usually just $1, $2...
+                    // But tests might use hardcoded values (e.g. 'pending').
+                    // Let's assume standard parameterized queries for now as per codebase usage.
+                    cols.forEach((col, idx) => {
+                        if (idx < params.length && params[idx] !== undefined) {
+                            newOrder[col] = params[idx];
+                        }
+                    });
+                    // Special case for missing wallet_address in some tests -> default it
+                    if (!newOrder.wallet_address)
+                        newOrder.wallet_address = 'mock-wallet';
+                    this.orders.push(newOrder);
+                    return { rows: [newOrder], rowCount: 1 };
+                }
+            }
+            if (t.startsWith('SELECT COUNT(*)')) {
+                // SELECT COUNT(*) as count FROM orders WHERE status = 'confirmed'
+                const statusMatch = text.match(/status = '([^']+)'/i);
+                let count = this.orders.length;
+                if (statusMatch) {
+                    count = this.orders.filter(o => o.status === statusMatch[1]).length;
+                }
+                return { rows: [{ count: count.toString() }], rowCount: 1 };
+            }
+            if (t.startsWith('SELECT')) {
+                // Handle WHERE id = $1
+                let results = [...this.orders];
+                const idMatch = text.match(/id = \$(\d+)/i);
+                if (idMatch) {
+                    const idx = parseInt(idMatch[1]) - 1;
+                    if (idx < params.length) {
+                        results = results.filter(o => o.id === params[idx]);
+                    }
+                }
+                // Handle ORDER BY
+                if (t.includes('ORDER BY')) {
+                    results.sort((a, b) => b.created_at - a.created_at);
+                }
+                // Handle LIMIT
+                if (t.includes('LIMIT')) {
+                    results = results.slice(0, 50);
+                }
+                // Handle specific field selection? "SELECT status, executed_price..."
+                if (!t.includes('*')) {
+                    // simple parser for selected columns
+                    const selectPart = text.substring(6, text.toUpperCase().indexOf('FROM')).trim();
+                    const fields = selectPart.split(',').map(f => f.trim().split(' ')[0]); // ignore aliases
+                    results = results.map(row => {
+                        const newRow = {};
+                        fields.forEach(f => {
+                            const cleanF = f.replace(/[^a-z0-9_]/gi, '');
+                            if (row[cleanF] !== undefined)
+                                newRow[cleanF] = row[cleanF];
+                        });
+                        return newRow;
+                    });
+                }
+                return { rows: results, rowCount: results.length };
             }
             if (t.startsWith('UPDATE ORDERS SET')) {
                 // UPDATE orders SET status = $2..., updated_at = NOW() WHERE id = $1
-                // Helper logic in worker.ts constructs dynamic queries.
-                // We need to extract ID. Usually it is the first param in WHERE clause, but worker.ts puts it as $1 and values follow?
-                // Actually worker.ts: "WHERE id = $1", [id, ...values]
+                const idMatch = text.match(/id\s*=\s*\$1/i);
                 const id = params[0];
                 const order = this.orders.find(o => o.id === id);
                 if (order) {
-                    // We need to parse which fields are being updated.
-                    // The query string looks like "status = $2, executed_price = $3 ..."
-                    // This is hard to parse generically.
-                    // However, we can infer from params.
-                    // worker.ts: keys mapped to $i+2. id is $1.
-                    // So params[1] corresponds to first field in SQL... wait.
-                    // Worker: `[id, ...Object.values(updates)]`
-                    // Query: `UPDATE ... SET field1=$2, field2=$3 ... WHERE id=$1`
-                    // We need to match the order of fields in the text to the params.
                     // Regex to find "column_name = $N"
                     const matches = text.match(/([a-z_]+)\s*=\s*\$(\d+)/g);
                     if (matches) {
@@ -74,11 +108,10 @@ exports.pool = (process.env.EXECUTION_MODE === 'mock')
                 }
                 return { rows: [], rowCount: 1 };
             }
-            if (t.startsWith('CREATE TABLE') || t.startsWith('DO $$')) {
-                return { rows: [], rowCount: 0 };
-            }
+            // Default fallthrough
             return { rows: [], rowCount: 0 };
         }
+        async end() { return; }
     })()
     : new pg_1.Pool({
         user: process.env.POSTGRES_USER || 'admin',

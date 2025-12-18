@@ -114,8 +114,8 @@ export const ExecutionTimeline: React.FC<Props> = ({ order, currentStep, validat
 
         // 1. Priority: If this is the current active step, it is ACTIVE.
         if (currentStep === stepId) {
-             // Exception: 'confirmed' is a final state, show as completed
-             if (stepId === 'confirmed') return 'completed';
+             // Exception: 'confirmed' and 'submitted' are treated as "action complete" states
+             if (stepId === 'confirmed' || stepId === 'submitted') return 'completed';
              return 'active';
         }
         
@@ -241,10 +241,43 @@ export const ExecutionTimeline: React.FC<Props> = ({ order, currentStep, validat
                     if (step === 'route_selected') { 
                         // If we are past routing selected, or it is validated/active
                         if (state === 'completed' || state === 'active') { // || validations['route_selected'] matches active too
-                            label = `Route Selected: ${order?.selectedDex || 'Best Price'}`;
-                            if (order?.executedPrice && state === 'completed') {
-                                // Maybe show price here too?
-                            }
+                            const dexName = order?.selectedDex || 'Best Price';
+                            const dexLink = dexName === 'Raydium' 
+                                ? 'https://github.com/raydium-io/raydium-sdk-V2-demo'
+                                : dexName === 'Meteora' 
+                                    ? 'https://docs.meteora.ag/'
+                                    : null;
+
+                            label = `Route Selected: ${dexName}`;
+                            
+                            return (
+                                <div key={step}>
+                                    <TimelineItem 
+                                        label={label} 
+                                        state={state}
+                                        spinning={isSpinning}
+                                        isLast={isLast}
+                                    />
+                                    {dexLink && (
+                                        <a 
+                                            href={dexLink} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            style={{
+                                                marginLeft: '44px', 
+                                                display: 'block',
+                                                fontSize: '0.75rem', 
+                                                color: '#3b82f6',
+                                                textDecoration: 'underline',
+                                                marginBottom: '8px',
+                                                marginTop: '-20px'
+                                            }}
+                                        >
+                                            View {dexName} Docs ↗
+                                        </a>
+                                    )}
+                                </div>
+                            );
                         }
                     }
 

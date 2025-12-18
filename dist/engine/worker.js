@@ -29,13 +29,22 @@ async function updateOrder(id, updates) {
     }));
 }
 const startWorker = () => {
-    console.log('Starting Execution Worker...');
     const EXECUTION_MODE = process.env.EXECUTION_MODE || 'mock';
+    console.log(`[Worker] 🛠️ INITIALIZING WORKER (Mode: ${EXECUTION_MODE}, PID: ${process.pid})`);
+    // Heartbeat for debug visibility
+    global.worker_alive = true;
+    setInterval(() => {
+        global.last_heartbeat = Date.now();
+        if (EXECUTION_MODE === 'mock') {
+            console.log(`[Worker] ❤️ HEARTBEAT - Listening for Mock Jobs... (PID: ${process.pid})`);
+        }
+    }, 10000);
     const processJob = async (job) => {
-        const { orderId, tokenIn, tokenOut, amount, executionMode } = job.data;
-        console.log(`Processing order ${orderId} in ${executionMode || 'default'} mode`);
+        const { orderId, tokenIn, tokenOut, amount, walletAddress, executionMode } = job.data;
+        console.log(`[Worker] ⚙️ PROCESSING ORDER: ${orderId} (PID: ${process.pid})`);
         // Select Router
         const router = (executionMode === 'devnet') ? devnetRouter : mockRouter;
+        console.log(`[Worker] Using ${executionMode === 'devnet' ? 'Real DexRouter' : 'Mock DexRouter'}`);
         const startTime = Date.now();
         try {
             // ⏳ GLOBAL DEADLINE GUARD (10s Budget)
@@ -63,8 +72,8 @@ const startWorker = () => {
             // 5️⃣ SUBMITTED (Allocated: ~1s) 
             await updateOrder(orderId, { status: 'submitted' });
             // Execute the swap (real or mock depending on EXECUTION_MODE)
-            const slippage = 0.01; // Default 1% slippage
-            const swapResult = await router.executeSwap(bestQuote, tokenIn, tokenOut, amount, slippage);
+            const slippageSetting = job.data.slippage || 0.01;
+            const swapResult = await router.executeSwap(bestQuote, tokenIn, tokenOut, amount, slippageSetting);
             await new Promise(r => setTimeout(r, 1000));
             // 6️⃣ CONFIRMED (Allocated: ~2-3s settlement)
             const remaining = ORDER_DEADLINE - (Date.now() - startTime);
@@ -83,8 +92,6 @@ const startWorker = () => {
         catch (e) {
             console.error(`Order ${orderId} failed:`, e);
             await updateOrder(orderId, { status: 'failed', errorReason: e.message });
-            // For mock mode, we don't throw to retry, we just log
-            // throw e; 
         }
     };
     if (EXECUTION_MODE === 'mock') {

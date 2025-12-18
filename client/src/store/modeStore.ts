@@ -7,6 +7,7 @@ export interface DevnetConfig {
   apiKey: string;
   balance: number;
   verified: boolean;
+  recommendedSlippage: number;
 }
 
 interface ModeStore {

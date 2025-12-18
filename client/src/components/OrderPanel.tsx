@@ -26,10 +26,13 @@ export const OrderPanel: React.FC<Props> = ({ onExecute, isLoading }) => {
     const [isTokenListLoading, setIsTokenListLoading] = useState(false);
     const { mode, devnetConfig } = useModeStore();
 
-    // Auto-sync wallet address from devnet config if available
+    // Auto-sync wallet address and slippage from devnet config if available
     useEffect(() => {
         if (mode === 'devnet' && devnetConfig?.walletAddress) {
             setWalletAddress(devnetConfig.walletAddress);
+        }
+        if (mode === 'devnet' && devnetConfig?.recommendedSlippage) {
+            setSlippage(devnetConfig.recommendedSlippage);
         }
     }, [mode, devnetConfig]);
 

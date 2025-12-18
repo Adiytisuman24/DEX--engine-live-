@@ -24,7 +24,8 @@ async function updateOrder(id: string, updates: Partial<Order>) {
     // Publish event
     redisPublisher.publish(ORDERS_CHANNEL, JSON.stringify({
         orderId: id,
-        status: updates.status, // might be undefined, which is fine
+        status: updates.status, 
+        executedPrice: updates.executedPrice, // Elevate price to top level
         metadata: updates
     }));
 }

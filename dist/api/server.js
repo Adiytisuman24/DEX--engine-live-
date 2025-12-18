@@ -62,6 +62,30 @@ const buildApp = () => {
     fastify.get('/', async () => {
         return { status: 'ok', message: 'DEX Order Execution Engine is running 🚀' };
     });
+    // Debug endpoint to check internal state on Render
+    fastify.get('/api/debug', async () => {
+        try {
+            const orderCountRes = await db_1.pool.query('SELECT COUNT(*) FROM orders');
+            const orderCount = orderCountRes.rows[0].count;
+            return {
+                status: 'alive',
+                pid: process.pid,
+                uptime: process.uptime(),
+                memory: process.memoryUsage(),
+                executionMode: process.env.EXECUTION_MODE || 'mock',
+                orderCount: parseInt(orderCount),
+                workerActive: !!global.worker_alive,
+                lastHeartbeat: global.last_heartbeat,
+                env: {
+                    render: !!process.env.RENDER,
+                    node_env: process.env.NODE_ENV
+                }
+            };
+        }
+        catch (e) {
+            return { status: 'degraded', error: e.message, pid: process.pid };
+        }
+    });
     fastify.get('/api/orders', async () => {
         const res = await db_1.pool.query('SELECT * FROM orders ORDER BY created_at DESC LIMIT 50');
         // map db snake_case to camelCase
@@ -76,7 +100,8 @@ const buildApp = () => {
             executedPrice: row.executed_price ? parseFloat(row.executed_price) : undefined,
             txHash: row.tx_hash,
             errorReason: row.error_reason,
-            createdAt: row.created_at
+            createdAt: row.created_at,
+            completedAt: row.updated_at // Use updated_at as fallback for completed_at if status is terminal
         }));
     });
     // Wallet Verification Endpoint
@@ -134,6 +159,7 @@ const buildApp = () => {
         // Persist
         await db_1.pool.query(`INSERT INTO orders (id, token_in, token_out, amount, slippage, wallet_address, status) VALUES ($1, $2, $3, $4, $5, $6, 'pending')`, [orderId, tokenIn, tokenOut, amount, slippage, walletAddress]);
         // Queue
+        console.log(`[API-MOCK] 🟢 ENQUEUING: ${orderId} (PID: ${process.pid}, BusID: ${global.__MOCK_BUS__?.listenerCount('mock-job')})`);
         await queue_1.orderQueue.add('execute-swap', { orderId, tokenIn, tokenOut, amount, slippage, walletAddress, executionMode }, {
             attempts: 3,
             backoff: { type: 'exponential', delay: 1000 }

@@ -27,7 +27,7 @@ export const pool = (process.env.EXECUTION_MODE === 'mock')
                 // But tests might use hardcoded values (e.g. 'pending').
                 // Let's assume standard parameterized queries for now as per codebase usage.
                 cols.forEach((col, idx) => {
-                    if (idx < params.length) {
+                    if (idx < params.length && params[idx] !== undefined) {
                         newOrder[col] = params[idx];
                     }
                 });
@@ -70,21 +70,22 @@ export const pool = (process.env.EXECUTION_MODE === 'mock')
                 results = results.slice(0, 50);
             }
 
-            // Handle specific field selection? "SELECT status, executed_price..."
-            if (!t.includes('*')) {
-                // simple parser for selected columns
-                const selectPart = text.substring(6, text.toUpperCase().indexOf('FROM')).trim();
-                const fields = selectPart.split(',').map(f => f.trim().split(' ')[0]); // ignore aliases
-                
+                // Ensure numeric types for DB fields often treated as strings
                 results = results.map(row => {
-                    const newRow: any = {};
-                    fields.forEach(f => {
-                         const cleanF = f.replace(/[^a-z0-9_]/gi, '');
-                         if (row[cleanF] !== undefined) newRow[cleanF] = row[cleanF];
-                    });
-                    return newRow;
+                    const mappedRow = { ...row };
+                    if (mappedRow.executed_price !== undefined) mappedRow.executed_price = Number(mappedRow.executed_price);
+                    if (mappedRow.amount !== undefined) mappedRow.amount = Number(mappedRow.amount);
+                    if (mappedRow.slippage !== undefined) mappedRow.slippage = Number(mappedRow.slippage);
+                    
+                    if (!t.includes('*')) {
+                        const selectPart = text.substring(6, text.toUpperCase().indexOf('FROM')).trim();
+                        const fields = selectPart.split(',').map(f => f.trim().split(' ')[0].replace(/[^a-z0-9_]/gi, ''));
+                        const filteredRow: any = {};
+                        fields.forEach(f => { if (mappedRow[f] !== undefined) filteredRow[f] = mappedRow[f]; });
+                        return filteredRow;
+                    }
+                    return mappedRow;
                 });
-            }
 
             return { rows: results, rowCount: results.length };
         }
@@ -96,19 +97,35 @@ export const pool = (process.env.EXECUTION_MODE === 'mock')
             const order = this.orders.find(o => o.id === id);
             
             if (order) {
-                // Regex to find "column_name = $N"
-                const matches = text.match(/([a-z_]+)\s*=\s*\$(\d+)/g);
+                // Robust mapping using regex for both column name and $ selection
+                const matches = text.match(/([a-zA-Z0-9_]+)\s*=\s*\$(\d+)/g);
                 if (matches) {
+                    const updates: any = {};
                     matches.forEach(m => {
                         const parts = m.split('=');
-                        const col = parts[0].trim();
-                        const idx = parseInt(parts[1].trim().replace('$','')) - 1; // 0-indexed
-                        if (idx < params.length && col !== 'id') {
-                             order[col] = params[idx];
+                        const col = parts[0].trim().toLowerCase();
+                        const paramIdx = parseInt(parts[1].trim().replace('$', '')) - 1;
+                        if (paramIdx < params.length && col !== 'id') {
+                             order[col] = params[paramIdx];
+                             updates[col] = params[paramIdx];
                         }
                     });
+                    // Publish event (assuming redisPublisher and ORDERS_CHANNEL are defined elsewhere in the actual app)
+                    // This part of the mock is just simulating the update logic, not the actual publishing.
+                    // If this were a real mock, redisPublisher would also be mocked.
+                    // For now, we'll just ensure the data is updated.
+                    // redisPublisher.publish(ORDERS_CHANNEL, JSON.stringify({
+                    //     orderId: id,
+                    //     status: updates.status, 
+                    //     executedPrice: updates.executed_price, // Elevate price to top level
+                    //     metadata: updates
+                    // }));
                 }
                 order.updated_at = new Date();
+                // If status is 'completed', set completed_at
+                if (order.status === 'completed' && !order.completed_at) {
+                    order.completed_at = new Date();
+                }
             }
             return { rows: [], rowCount: 1 };
         }
@@ -146,7 +163,8 @@ export const initDb = async () => {
                     tx_hash VARCHAR(100),
                     error_reason TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    completed_at TIMESTAMP
                 );
                 
                 -- Attempt to add column if it doesn't exist (migration hack for dev)
