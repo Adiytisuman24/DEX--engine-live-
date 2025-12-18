@@ -156,7 +156,8 @@ Connect to: `ws://localhost:3000/ws`
 
 ## 🔗 Links
 
-*   **Deployment**: [Link Placeholder](https://dex-engine-demo.onrender.com)
-*   **Demo Video**: [Link Placeholder](https://youtube.com/...)
+*   **Deployment**: (https://dex-engine-demo.onrender.com)
+*   **Demo Video**: (https://youtube.com/...](https://youtu.be/SgyjJpLL2YA?si=_MnaS7_9gIA3Drp-)
+
 
 
