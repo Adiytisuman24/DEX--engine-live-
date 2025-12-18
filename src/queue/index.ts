@@ -21,14 +21,17 @@ class MockRedis extends EventEmitter {
     quit() { return Promise.resolve(); }
 }
 const globalMockRedis = new EventEmitter(); // Shared bus for all mock instances
+(global as any).mockRedis = globalMockRedis;
 
 class MockQueue {
     name: string;
     constructor(name: string) { this.name = name; }
     async add(name: string, data: any, opts?: any) {
-        console.log(`[MockQueue] Added job ${name} to ${this.name}`);
-        // Simulate worker processing by emitting an event that the worker can listen to
-        globalMockRedis.emit('mock-job', { name, data, opts });
+        console.log(`[MockQueue] 🟢 EMITTING JOB: ${name} for order ${data.orderId}`);
+        // Use a slight delay to ensure listeners are ready in all environments
+        setTimeout(() => {
+            globalMockRedis.emit('mock-job', { name, data, opts });
+        }, 100);
         return { id: 'mock-' + Date.now() };
     }
     async close() { }
@@ -67,7 +70,9 @@ export const closeQueueRedis = async () => {
 // Helper for the worker to listen for mock jobs
 export const listenForMockJobs = (handler: (job: any) => Promise<void>) => {
     if (EXECUTION_MODE === 'mock') {
+        console.log('[Worker] 👂 Listening for Mock Jobs...');
         globalMockRedis.on('mock-job', async (payload) => {
+            console.log(`[Worker] 📥 RECEIVED JOB: ${payload.name} for order ${payload.data.orderId}`);
             try {
                 // Simulate Job object
                 const job = { 
@@ -78,7 +83,7 @@ export const listenForMockJobs = (handler: (job: any) => Promise<void>) => {
                 };
                 await handler(job);
             } catch (err) {
-                console.error('Mock job failed', err);
+                console.error('[Worker] ❌ Mock job failed', err);
             }
         });
     }

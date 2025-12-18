@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, ArrowRight } from 'lucide-react';
+import { AlertCircle, ArrowRight, Wallet } from 'lucide-react';
+import { useModeStore } from '../store/modeStore';
 import { fetchTopTokens } from '../services/coinGecko';
 import type { Token } from '../types';
 
@@ -23,6 +24,14 @@ export const OrderPanel: React.FC<Props> = ({ onExecute, isLoading }) => {
     const [slippage, setSlippage] = useState<number>(0.01);
     const [walletAddress, setWalletAddress] = useState('');
     const [isTokenListLoading, setIsTokenListLoading] = useState(false);
+    const { mode, devnetConfig } = useModeStore();
+
+    // Auto-sync wallet address from devnet config if available
+    useEffect(() => {
+        if (mode === 'devnet' && devnetConfig?.walletAddress) {
+            setWalletAddress(devnetConfig.walletAddress);
+        }
+    }, [mode, devnetConfig]);
 
     useEffect(() => {
         const loadTokens = async () => {
@@ -129,13 +138,23 @@ export const OrderPanel: React.FC<Props> = ({ onExecute, isLoading }) => {
             </div>
 
             <div className="input-group">
-                <label className="input-label">Wallet Address</label>
+                <label className="input-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <Wallet size={14} />
+                    Wallet Address {mode === 'devnet' && <span style={{ fontSize: '0.7rem', color: 'var(--success)', fontWeight: 'bold' }}>(Verified)</span>}
+                </label>
                 <input 
                     type="text" 
                     className="input-field" 
                     value={walletAddress}
                     onChange={e => setWalletAddress(e.target.value)}
                     placeholder="Enter Solana wallet address..."
+                    disabled={mode === 'devnet'}
+                    style={{ 
+                        background: mode === 'devnet' ? '#f0f9ff' : 'white',
+                        cursor: mode === 'devnet' ? 'not-allowed' : 'text',
+                        borderColor: mode === 'devnet' ? '#bae6fd' : 'var(--border)',
+                        fontFamily: 'monospace'
+                    }}
                 />
             </div>
 

@@ -34,11 +34,12 @@ export const startWorker = () => {
     const EXECUTION_MODE = process.env.EXECUTION_MODE || 'mock';
 
     const processJob = async (job: { id: string, data: any }) => {
-        const { orderId, tokenIn, tokenOut, amount, executionMode } = job.data;
-        console.log(`Processing order ${orderId} in ${executionMode || 'default'} mode`);
-
+        const { orderId, tokenIn, tokenOut, amount, slippage, walletAddress, executionMode } = job.data;
+        console.log(`[Worker] ⚙️ PROCESSING ORDER: ${orderId} (${tokenIn}/${tokenOut}) [Mode: ${executionMode}]`);
+        
         // Select Router
         const router = (executionMode === 'devnet') ? devnetRouter : mockRouter;
+        console.log(`[Worker] Using ${executionMode === 'devnet' ? 'Real DexRouter' : 'Mock DexRouter'}`);
 
         const startTime = Date.now();
         try {

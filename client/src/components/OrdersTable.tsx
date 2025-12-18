@@ -1,24 +1,36 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Order } from '../types';
 import { useUIStore } from '../store/uiStore';
 
 interface Props {
     orders: Order[];
     onSelectOrder: (orderId: string, multi?: boolean) => void;
-    // activeOrderId is managed by store now, but we might pass it down or use store directly?
-    // Let's use store for UI logic, but allow overriding if simple component
-    // Actually, prompt says "Hovering highlights, clicking selects" using store logic
     isCompact?: boolean;
 }
 
 export const OrdersTable: React.FC<Props> = ({ orders, onSelectOrder, isCompact = false }) => {
     const [tab, setTab] = useState<'active' | 'history'>('active');
-    
-    // Connect to UI Store
     const { selectedOrderIds, hoveredOrderId, setHoveredOrder } = useUIStore();
+    
+    // Use an initializer function to avoid calling Date.now() during re-renders, 
+    // and avoid the cascading render lint rule.
+    const [now, setNow] = useState(() => Date.now()); 
+    
+    useEffect(() => {
+        const timer = setInterval(() => setNow(Date.now()), 10000);
+        return () => clearInterval(timer);
+    }, []);
 
-    const activeOrders = orders.filter(o => ['pending', 'routing', 'building', 'submitted'].includes(o.status));
-    const historyOrders = orders.filter(o => ['confirmed', 'failed'].includes(o.status));
+    const STICKY_DURATION = 2 * 60 * 1000; // 2 minutes in ms
+
+    const isActive = (o: Order) => {
+        if (['pending', 'queued', 'routing', 'route_selected', 'building', 'submitted'].includes(o.status)) return true;
+        if (o.completedAt && (now - o.completedAt < STICKY_DURATION)) return true;
+        return false;
+    };
+
+    const activeOrders = orders.filter(o => isActive(o));
+    const historyOrders = orders.filter(o => !isActive(o));
 
     const displayOrders = tab === 'active' ? activeOrders : historyOrders;
     
@@ -61,6 +73,7 @@ export const OrdersTable: React.FC<Props> = ({ orders, onSelectOrder, isCompact 
                         <tr>
                             <th style={{ padding: '0.75rem 1rem', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>ID</th>
                             <th style={{ padding: '0.75rem 1rem', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>PAIR</th>
+                            <th style={{ padding: '0.75rem 1rem', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>QUANTITY</th>
                             <th style={{ padding: '0.75rem 1rem', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>STATUS</th>
                             <th style={{ padding: '0.75rem 1rem', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>PRICE</th>
                         </tr>
@@ -68,7 +81,7 @@ export const OrdersTable: React.FC<Props> = ({ orders, onSelectOrder, isCompact 
                     <tbody>
                         {displayOrders.length === 0 && (
                             <tr>
-                                <td colSpan={4} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                                <td colSpan={5} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
                                     <div style={{opacity: 0.5, marginBottom: '0.5rem'}}>📭</div>
                                     No orders found in {tab}
                                 </td>
@@ -78,6 +91,8 @@ export const OrdersTable: React.FC<Props> = ({ orders, onSelectOrder, isCompact 
                             const isSelected = selectedOrderIds.includes(order.orderId);
                             const isHovered = hoveredOrderId === order.orderId;
                             
+                            const totalValue = order.executedPrice ? (order.amount * order.executedPrice) : undefined;
+
                             return (
                             <tr 
                                 key={order.orderId}
@@ -105,15 +120,26 @@ export const OrdersTable: React.FC<Props> = ({ orders, onSelectOrder, isCompact 
                                     {!isCompact && order.createdAt && <div style={{fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px'}}>{new Date(order.createdAt).toLocaleTimeString()}</div>}
                                 </td>
                                 <td style={{ padding: rowPadding }}>
+                                    <div style={{fontWeight: 500}}>{order.amount} {order.tokenIn}</div>
+                                </td>
+                                <td style={{ padding: rowPadding }}>
                                     <span className={`badge badge-${order.status}`} style={{
-                                        // Ensure validated/history colors are kept unless selected explicitly overrides significantly, 
-                                        // but usually background handles highlight. Badge stays same.
+                                        // Ensure validated/history colors are kept
                                     }}>
                                         {order.status}
                                     </span>
                                 </td>
                                 <td style={{ padding: rowPadding }}>
-                                    {order.executedPrice ? `${order.executedPrice.toFixed(4)} ${order.tokenOut}` : '-'}
+                                    {order.executedPrice ? (
+                                        <>
+                                            <div style={{fontWeight: 600}}>{order.executedPrice.toFixed(4)}</div>
+                                            <div style={{fontSize: '0.7rem', color: 'var(--text-muted)'}}>
+                                                Total: {totalValue?.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} {order.tokenOut}
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div style={{color: 'var(--text-muted)'}}>-</div>
+                                    )}
                                 </td>
                             </tr>
                         )})}

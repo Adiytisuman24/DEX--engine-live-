@@ -30,6 +30,20 @@ const buildApp = () => {
         return { status: 'ok', message: 'DEX Order Execution Engine is running 🚀' };
     });
 
+    // Debug endpoint to check internal state on Render
+    fastify.get('/api/debug', async () => {
+        const orderCount = (await pool.query('SELECT COUNT(*) FROM orders')).rows[0].count;
+        return { 
+            status: 'alive',
+            executionMode: process.env.EXECUTION_MODE || 'mock',
+            orderCount: parseInt(orderCount),
+            env: {
+                render: !!process.env.RENDER,
+                node_env: process.env.NODE_ENV
+            }
+        };
+    });
+
     fastify.get('/api/orders', async () => {
         const res = await pool.query('SELECT * FROM orders ORDER BY created_at DESC LIMIT 50');
         // map db snake_case to camelCase

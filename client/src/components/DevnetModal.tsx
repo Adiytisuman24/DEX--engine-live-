@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useModeStore } from '../store/modeStore';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import { API_URL } from '../config';
 
 export const DevnetModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const { setDevnetConfig, setMode } = useModeStore();
@@ -13,6 +12,12 @@ export const DevnetModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const handleVerify = async () => {
         setLoading(true);
         setError('');
+
+        if (!apiKey) {
+            setError('API Key is strictly required for Devnet Mode.');
+            setLoading(false);
+            return;
+        }
 
         try {
             const res = await fetch(`${API_URL}/api/verify-wallet`, {
@@ -91,13 +96,13 @@ export const DevnetModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
                 <div style={{ marginBottom: '1.5rem' }}>
                     <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, fontSize: '0.875rem' }}>
-                        API Key (Optional)
+                        RPC API Key (Required)
                     </label>
                     <input
                         type="password"
                         value={apiKey}
                         onChange={(e) => setApiKey(e.target.value)}
-                        placeholder="Enter Solana RPC API key"
+                        placeholder="e.g. Helius / QuickNode API Key"
                         style={{
                             width: '100%',
                             padding: '0.75rem',
@@ -107,7 +112,7 @@ export const DevnetModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                         }}
                     />
                     <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.75rem', color: '#6b7280' }}>
-                        For faster RPC performance (e.g., Helius, QuickNode)
+                        Please fetch an API Key from your Solana RPC provider (e.g. Helius, Alchemy).
                     </p>
                 </div>
 
@@ -143,15 +148,15 @@ export const DevnetModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     </button>
                     <button
                         onClick={handleVerify}
-                        disabled={!walletAddress || loading}
+                        disabled={!walletAddress || !apiKey || loading}
                         style={{
                             padding: '0.75rem 1.5rem',
-                            background: !walletAddress || loading ? '#9ca3af' : '#3b82f6',
+                            background: (!walletAddress || !apiKey || loading) ? '#9ca3af' : '#3b82f6',
                             color: 'white',
                             border: 'none',
                             borderRadius: '6px',
                             fontWeight: 500,
-                            cursor: !walletAddress || loading ? 'not-allowed' : 'pointer'
+                            cursor: (!walletAddress || !apiKey || loading) ? 'not-allowed' : 'pointer'
                         }}
                     >
                         {loading ? 'Verifying...' : 'Verify & Enable'}

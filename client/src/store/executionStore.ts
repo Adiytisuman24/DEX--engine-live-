@@ -88,7 +88,8 @@ export const useExecutionStore = create<ExecutionStore>((set) => ({
             // Queue & Retry info
             queuePosition: event.queuePosition ?? existingOrder.queuePosition,
             retryAttempt: event.retryAttempt ?? existingOrder.retryAttempt,
-            maxRetries: event.maxRetries ?? existingOrder.maxRetries
+            maxRetries: event.maxRetries ?? existingOrder.maxRetries,
+            completedAt: ['confirmed', 'failed'].includes(event.status) ? Date.now() : existingOrder.completedAt
         };
 
         return {

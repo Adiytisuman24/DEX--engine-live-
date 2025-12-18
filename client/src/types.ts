@@ -17,6 +17,7 @@ export interface Order {
   queuePosition?: number;
   retryAttempt?: number;
   maxRetries?: number;
+  completedAt?: number; // Timestamp when order reached confirmed/failed
 }
 
 export interface OrderMetadata {
