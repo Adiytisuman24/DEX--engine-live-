@@ -209,14 +209,20 @@ function App() {
   const latestEvent = currentEvents[currentEvents.length - 1];
   
   // MERGE logic: Real backend events are the primary truth.
-  // Simulation is only allowed to "anticipate" ONE step ahead of the server.
+  // ALLOWANCE: Simulation can "anticipate" up to 2 steps ahead to feel fluid.
   const getStepIndex = (s: string | null) => s ? TIMELINE.findIndex(item => item.step === s) : -1;
   const serverIdx = getStepIndex(latestEvent?.status as string || activeTimelineOrder?.status || null);
   const simIdx = (activeTimelineOrderId === activeSimulationId) ? getStepIndex(simulatedStep) : -1;
 
-  // The visual step is the server step, OR the sim step ONLY if the sim is not too far ahead.
-  // This prevents the "All Green while Pending" bug.
-  const visualIdx = (simIdx > serverIdx + 1) ? (serverIdx + 1) : Math.max(serverIdx, simIdx);
+  // Final visual index: allow simulation to lead by up to 2 steps, but NEVER auto-confirm.
+  const ANTICIPATION_WINDOW = 2;
+  const maxAllowedIdx = Math.min(serverIdx + ANTICIPATION_WINDOW, TIMELINE.length - 2); // Cap at 'submitted'
+  
+  let visualIdx = Math.max(serverIdx, simIdx);
+  if (visualIdx > maxAllowedIdx && serverIdx < TIMELINE.length - 1) {
+      visualIdx = maxAllowedIdx;
+  }
+
   const derivedCurrentStep = visualIdx >= 0 ? TIMELINE[visualIdx]?.step as ExecutionStep : null;
   
   const derivedValidations = currentEvents.reduce((acc, ev) => {
@@ -224,7 +230,7 @@ function App() {
       return acc;
   }, {} as Record<string, boolean>);
   
-  // If we are at visualIdx, we also "fake" validate previous steps for the UI
+  // Visual validation: turn steps green as the simulation/server reaches them
   for (let i = 0; i <= visualIdx; i++) {
       derivedValidations[TIMELINE[i].step] = true;
   }

@@ -14,7 +14,7 @@ class MockRedis extends EventEmitter {
     }
     subscribe(channel: string) { 
         // In-memory, we just listen to the global emitter
-        globalMockRedis.on('message', (ch, msg) => {
+        globalMockRedis.on('message', (ch: string, msg: string) => {
             if (ch === channel) this.emit('message', ch, msg);
         });
     }
@@ -76,7 +76,7 @@ export const closeQueueRedis = async () => {
 export const listenForMockJobs = (handler: (job: any) => Promise<void>) => {
     if (EXECUTION_MODE === 'mock') {
         console.log('[Worker] 👂 Listening for Mock Jobs...');
-        globalMockRedis.on('mock-job', async (payload) => {
+        globalMockRedis.on('mock-job', async (payload: { name: string; data: any; opts?: any }) => {
             console.log(`[Worker] 📥 RECEIVED JOB: ${payload.name} for order ${payload.data.orderId}`);
             try {
                 // Simulate Job object
