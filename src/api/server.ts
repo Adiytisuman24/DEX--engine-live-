@@ -32,20 +32,26 @@ const buildApp = () => {
 
     // Debug endpoint to check internal state on Render
     fastify.get('/api/debug', async () => {
-        const orderCountRes = await pool.query('SELECT COUNT(*) FROM orders');
-        const orderCount = orderCountRes.rows[0].count;
-        return { 
-            status: 'alive',
-            pid: process.pid,
-            uptime: process.uptime(),
-            memory: process.memoryUsage(),
-            executionMode: process.env.EXECUTION_MODE || 'mock',
-            orderCount: parseInt(orderCount),
-            env: {
-                render: !!process.env.RENDER,
-                node_env: process.env.NODE_ENV
-            }
-        };
+        try {
+            const orderCountRes = await pool.query('SELECT COUNT(*) FROM orders');
+            const orderCount = orderCountRes.rows[0].count;
+            return { 
+                status: 'alive',
+                pid: process.pid,
+                uptime: process.uptime(),
+                memory: process.memoryUsage(),
+                executionMode: process.env.EXECUTION_MODE || 'mock',
+                orderCount: parseInt(orderCount),
+                workerActive: !!(global as any).worker_alive,
+                lastHeartbeat: (global as any).last_heartbeat,
+                env: {
+                    render: !!process.env.RENDER,
+                    node_env: process.env.NODE_ENV
+                }
+            };
+        } catch (e: any) {
+            return { status: 'degraded', error: e.message, pid: process.pid };
+        }
     });
 
     fastify.get('/api/orders', async () => {
@@ -170,4 +176,3 @@ export const startServer = async () => {
         process.exit(1);
     }
 }
-

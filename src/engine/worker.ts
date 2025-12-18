@@ -32,9 +32,18 @@ async function updateOrder(id: string, updates: Partial<Order>) {
 export const startWorker = () => {
     const EXECUTION_MODE = process.env.EXECUTION_MODE || 'mock';
     console.log(`[Worker] 🛠️ INITIALIZING WORKER (Mode: ${EXECUTION_MODE}, PID: ${process.pid})`);
+    
+    // Heartbeat for debug visibility
+    (global as any).worker_alive = true;
+    setInterval(() => {
+        (global as any).last_heartbeat = Date.now();
+        if (EXECUTION_MODE === 'mock') {
+            console.log(`[Worker] ❤️ HEARTBEAT - Listening for Mock Jobs... (PID: ${process.pid})`);
+        }
+    }, 10000);
 
     const processJob = async (job: { id: string, data: any }) => {
-        const { orderId, tokenIn, tokenOut, amount, slippage, walletAddress, executionMode } = job.data;
+        const { orderId, tokenIn, tokenOut, amount, walletAddress, executionMode } = job.data;
         console.log(`[Worker] ⚙️ PROCESSING ORDER: ${orderId} (PID: ${process.pid})`);
         
         // Select Router
@@ -77,8 +86,8 @@ export const startWorker = () => {
             await updateOrder(orderId, { status: 'submitted' });
             
             // Execute the swap (real or mock depending on EXECUTION_MODE)
-            const slippage = 0.01; // Default 1% slippage
-            const swapResult = await router.executeSwap(bestQuote, tokenIn, tokenOut, amount, slippage);
+            const slippageSetting = job.data.slippage || 0.01;
+            const swapResult = await router.executeSwap(bestQuote, tokenIn, tokenOut, amount, slippageSetting);
             
             await new Promise(r => setTimeout(r, 1000));
 
@@ -101,8 +110,6 @@ export const startWorker = () => {
         } catch (e: any) {
             console.error(`Order ${orderId} failed:`, e);
             await updateOrder(orderId, { status: 'failed', errorReason: e.message });
-            // For mock mode, we don't throw to retry, we just log
-            // throw e; 
         }
     };
 

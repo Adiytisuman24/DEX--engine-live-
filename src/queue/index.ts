@@ -20,20 +20,24 @@ class MockRedis extends EventEmitter {
     }
     quit() { return Promise.resolve(); }
 }
-// Use global scope to share the emitter across module instances in the same process
-const globalMockRedis = (global as any).mockRedis || new EventEmitter();
-if (!(global as any).mockRedis) {
-    (global as any).mockRedis = globalMockRedis;
-    // Set a high limit to prevent warnings during complex simulations
-    globalMockRedis.setMaxListeners(100);
-}
+
+// Truly global bus for mock singleton
+const getGlobalBus = () => {
+    const g = (global as any);
+    if (!g.__MOCK_BUS__) {
+        g.__MOCK_BUS__ = new EventEmitter();
+        g.__MOCK_BUS__.setMaxListeners(100);
+    }
+    return g.__MOCK_BUS__;
+};
+const globalMockRedis = getGlobalBus();
 
 class MockQueue {
     name: string;
     constructor(name: string) { this.name = name; }
     async add(name: string, data: any, opts?: any) {
-        console.log(`[MockQueue] 🟢 EMITTING JOB: ${name} for order ${data.orderId}`);
-        // Use a slight delay to ensure listeners are ready in all environments
+        console.log(`[MockQueue] 🟢 EMITTING JOB: ${name} for order ${data.orderId} (PID: ${process.pid})`);
+        // Use a slight delay to ensure listeners are ready
         setTimeout(() => {
             globalMockRedis.emit('mock-job', { name, data, opts });
         }, 100);
@@ -75,9 +79,9 @@ export const closeQueueRedis = async () => {
 // Helper for the worker to listen for mock jobs
 export const listenForMockJobs = (handler: (job: any) => Promise<void>) => {
     if (EXECUTION_MODE === 'mock') {
-        console.log('[Worker] 👂 Listening for Mock Jobs...');
+        console.log('[Worker] 👂 Setting up Mock Job Listener...');
         globalMockRedis.on('mock-job', async (payload: { name: string; data: any; opts?: any }) => {
-            console.log(`[Worker] 📥 RECEIVED JOB: ${payload.name} for order ${payload.data.orderId}`);
+            console.log(`[Worker] 📥 RECEIVED JOB: ${payload.name} for order ${payload.data.orderId} (PID: ${process.pid})`);
             try {
                 // Simulate Job object
                 const job = { 
@@ -93,4 +97,3 @@ export const listenForMockJobs = (handler: (job: any) => Promise<void>) => {
         });
     }
 };
-
