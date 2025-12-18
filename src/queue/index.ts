@@ -20,8 +20,13 @@ class MockRedis extends EventEmitter {
     }
     quit() { return Promise.resolve(); }
 }
-const globalMockRedis = new EventEmitter(); // Shared bus for all mock instances
-(global as any).mockRedis = globalMockRedis;
+// Use global scope to share the emitter across module instances in the same process
+const globalMockRedis = (global as any).mockRedis || new EventEmitter();
+if (!(global as any).mockRedis) {
+    (global as any).mockRedis = globalMockRedis;
+    // Set a high limit to prevent warnings during complex simulations
+    globalMockRedis.setMaxListeners(100);
+}
 
 class MockQueue {
     name: string;

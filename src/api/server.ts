@@ -32,9 +32,13 @@ const buildApp = () => {
 
     // Debug endpoint to check internal state on Render
     fastify.get('/api/debug', async () => {
-        const orderCount = (await pool.query('SELECT COUNT(*) FROM orders')).rows[0].count;
+        const orderCountRes = await pool.query('SELECT COUNT(*) FROM orders');
+        const orderCount = orderCountRes.rows[0].count;
         return { 
             status: 'alive',
+            pid: process.pid,
+            uptime: process.uptime(),
+            memory: process.memoryUsage(),
             executionMode: process.env.EXECUTION_MODE || 'mock',
             orderCount: parseInt(orderCount),
             env: {
@@ -134,6 +138,7 @@ const buildApp = () => {
         );
 
         // Queue
+        console.log(`[API] 🟦 ADDING JOB TO QUEUE for Order: ${orderId} (PID: ${process.pid})`);
         await orderQueue.add('execute-swap', { orderId, tokenIn, tokenOut, amount, slippage, walletAddress, executionMode }, {
             attempts: 3,
             backoff: { type: 'exponential', delay: 1000 }

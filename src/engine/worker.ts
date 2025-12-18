@@ -30,12 +30,12 @@ async function updateOrder(id: string, updates: Partial<Order>) {
 }
 
 export const startWorker = () => {
-    console.log('Starting Execution Worker...');
     const EXECUTION_MODE = process.env.EXECUTION_MODE || 'mock';
+    console.log(`[Worker] 🛠️ INITIALIZING WORKER (Mode: ${EXECUTION_MODE}, PID: ${process.pid})`);
 
     const processJob = async (job: { id: string, data: any }) => {
         const { orderId, tokenIn, tokenOut, amount, slippage, walletAddress, executionMode } = job.data;
-        console.log(`[Worker] ⚙️ PROCESSING ORDER: ${orderId} (${tokenIn}/${tokenOut}) [Mode: ${executionMode}]`);
+        console.log(`[Worker] ⚙️ PROCESSING ORDER: ${orderId} (PID: ${process.pid})`);
         
         // Select Router
         const router = (executionMode === 'devnet') ? devnetRouter : mockRouter;

@@ -208,21 +208,26 @@ function App() {
   // Deriving props for ExecutionTimeline from event stream
   const latestEvent = currentEvents[currentEvents.length - 1];
   
-  // Advanced Merge: We want the "most advanced" step between simulation and real events
-  // to avoid flickering and ensure the user sees progress even if the network lags.
-  const getStepIndex = (s: string | null) => TIMELINE.findIndex(item => item.step === s);
-  
-  const serverStep = latestEvent?.status as ExecutionStep;
-  const simStep = (activeTimelineOrderId === activeSimulationId) ? simulatedStep : null;
-  
-  const derivedCurrentStep = (getStepIndex(serverStep) >= getStepIndex(simStep)) 
-    ? serverStep 
-    : (simStep as ExecutionStep);
+  // MERGE logic: Real backend events are the primary truth.
+  // Simulation is only allowed to "anticipate" ONE step ahead of the server.
+  const getStepIndex = (s: string | null) => s ? TIMELINE.findIndex(item => item.step === s) : -1;
+  const serverIdx = getStepIndex(latestEvent?.status as string || activeTimelineOrder?.status || null);
+  const simIdx = (activeTimelineOrderId === activeSimulationId) ? getStepIndex(simulatedStep) : -1;
+
+  // The visual step is the server step, OR the sim step ONLY if the sim is not too far ahead.
+  // This prevents the "All Green while Pending" bug.
+  const visualIdx = (simIdx > serverIdx + 1) ? (serverIdx + 1) : Math.max(serverIdx, simIdx);
+  const derivedCurrentStep = visualIdx >= 0 ? TIMELINE[visualIdx]?.step as ExecutionStep : null;
   
   const derivedValidations = currentEvents.reduce((acc, ev) => {
       acc[ev.status as string] = true;
       return acc;
   }, {} as Record<string, boolean>);
+  
+  // If we are at visualIdx, we also "fake" validate previous steps for the UI
+  for (let i = 0; i <= visualIdx; i++) {
+      derivedValidations[TIMELINE[i].step] = true;
+  }
   
   const showTimeline = !!activeTimelineOrder;
 
